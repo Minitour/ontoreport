@@ -9,7 +9,13 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use crate::model::{Index, Origin, Term};
 use crate::report::{bars, Chart, Direction, Finding, Node, Row, Section};
 
-const TOP_LABELS: &[&str] = &["entity", "owl:thing", "thing"];
+/// Keys of the top class: labels, or the IRI (lower-cased) when the file defining it is not loaded.
+const TOP_LABELS: &[&str] = &[
+    "entity",
+    "owl:thing",
+    "thing",
+    "http://purl.obolibrary.org/obo/bfo_0000001",
+];
 const WEAK_SOURCES: &[&str] = &["wikipedia.org", "wikipedia"];
 
 /// Review statuses in display order; anything else is grouped under "other".
@@ -63,6 +69,8 @@ enum Reach {
 struct Tree<'a> {
     parents: HashMap<&'a str, Vec<&'a str>>,
     memo: HashMap<&'a str, Reach>,
+    /// Without BFO in the project, a class with no recorded parent is a root under owl:Thing.
+    roots_reach_top: bool,
 }
 
 impl<'a> Tree<'a> {
@@ -80,9 +88,11 @@ impl<'a> Tree<'a> {
             let e = parents.entry(t.key.as_str()).or_default();
             e.extend(t.parents.iter().map(String::as_str));
         }
+        let roots_reach_top = !uses_bfo(index);
         Tree {
             parents,
             memo: HashMap::new(),
+            roots_reach_top,
         }
     }
 
@@ -97,7 +107,11 @@ impl<'a> Tree<'a> {
         }
         self.memo.insert(label, Reach::Visiting);
         let ps = self.parents.get(label).cloned().unwrap_or_default();
-        let ok = ps.into_iter().any(|p| self.reaches_top(p));
+        let ok = if ps.is_empty() {
+            self.roots_reach_top && self.parents.contains_key(label)
+        } else {
+            ps.into_iter().any(|p| self.reaches_top(p))
+        };
         self.memo
             .insert(label, if ok { Reach::Yes } else { Reach::No });
         ok
@@ -124,9 +138,31 @@ impl<'a> Tree<'a> {
     }
 }
 
+/// Whether the project is built on BFO: then every class must reach BFO's 'entity'. Otherwise the top
+/// is owl:Thing and any class with no asserted parent is a root under it.
+fn uses_bfo(index: &Index) -> bool {
+    const BFO_ENTITY: &str = "http://purl.obolibrary.org/obo/bfo_0000001";
+    index.terms.iter().any(|t| {
+        t.iri.as_deref() == Some("http://purl.obolibrary.org/obo/BFO_0000001")
+            || t.parents.iter().any(|p| p == "entity" || p == BFO_ENTITY)
+    }) || index
+        .extra_parents
+        .values()
+        .flatten()
+        .any(|p| p == "entity")
+}
+
 pub fn structure(index: &Index) -> Section {
     let mut s = Section::new("structure", "Structure");
     let mut tree = Tree::new(index);
+    s.metric(
+        "top class",
+        if tree.roots_reach_top {
+            "owl:Thing"
+        } else {
+            "BFO entity"
+        },
+    );
     let mut breaks: BTreeMap<String, u64> = BTreeMap::new();
     let mut missing_by: BTreeMap<String, u64> = BTreeMap::new();
     for origin in [Origin::Statements, Origin::Candidates] {
@@ -149,7 +185,7 @@ pub fn structure(index: &Index) -> Section {
                     *breaks.entry((*e).to_string()).or_default() += 1;
                 }
                 s.findings.push(Finding {
-                    check: "no path to the top class",
+                    check: "no path to the top class".into(),
                     element: t.label.clone(),
                     origin,
                     source: t.source.clone(),
@@ -274,7 +310,7 @@ pub fn provenance(index: &Index) -> Section {
 
 fn finding(check: &'static str, t: &Term, detail: String) -> Finding {
     Finding {
-        check,
+        check: check.into(),
         element: t.label.clone(),
         origin: t.origin,
         source: t.source.clone(),
@@ -343,7 +379,7 @@ pub fn traceability(index: &Index) -> Section {
             with_none += 1;
             slot[2] += 1;
             s.findings.push(Finding {
-                check: "group with no question, use case or reason",
+                check: "group with no question, use case or reason".into(),
                 element: g.name.clone(),
                 origin: Origin::Candidates,
                 source: t.source.clone(),
@@ -524,4 +560,224 @@ fn named(c: &[u64; 4]) -> BTreeMap<&'static str, u64> {
         .filter(|(_, n)| **n > 0)
         .map(|(k, n)| (*k, *n))
         .collect()
+}
+
+// ── Consistency and pitfalls (ontology files) ──────────────────────────────
+
+const IMPORTANCE: &[&str] = &["Critical", "Important", "Minor"];
+
+pub fn logic(index: &Index) -> Section {
+    let mut s = logic_checks(index);
+    for (path, why) in &index.unreadable {
+        s.ran = true;
+        s.findings.push(Finding {
+            check: "file could not be read".into(),
+            element: path.rsplit(['/', '\\']).next().unwrap_or(path).to_string(),
+            origin: Origin::Statements,
+            source: None,
+            status: None,
+            detail: why.clone(),
+        });
+    }
+    if !index.unreadable.is_empty() {
+        s.metric(
+            "ontology files that could not be read",
+            index.unreadable.len(),
+        );
+    }
+    let repaired: usize = index
+        .ontologies
+        .iter()
+        .map(|o| o.declared_on_read + o.nominals_skipped)
+        .sum();
+    if repaired > 0 {
+        let declared: usize = index.ontologies.iter().map(|o| o.declared_on_read).sum();
+        let skipped: usize = index.ontologies.iter().map(|o| o.nominals_skipped).sum();
+        s.notes.push(format!(
+            "To read the files, {declared} IRIs used as classes without a class declaration were declared              classes, and {skipped} equivalences to enumerated classes (owl:oneOf) were skipped."
+        ));
+    }
+    s.finish()
+}
+
+fn logic_checks(index: &Index) -> Section {
+    if index.ontologies.is_empty() {
+        return Section::not_run(
+            "logic",
+            "Consistency and pitfalls",
+            "needs an ontology file (RDF/XML, OWL functional syntax, Turtle or N-Triples)",
+        );
+    }
+    let mut s = Section::new("logic", "Consistency and pitfalls");
+    let timing = std::env::var_os("ONTOREPORT_TIMING").is_some();
+    let (cons, pits) = std::thread::scope(|scope| {
+        let c = scope.spawn(|| {
+            let t = std::time::Instant::now();
+            let r = crate::owl::consistency(&index.ontologies);
+            if timing {
+                eprintln!(
+                    "    consistency (whelk) {:.0} ms",
+                    t.elapsed().as_secs_f64() * 1e3
+                );
+            }
+            r
+        });
+        let p = scope.spawn(|| {
+            let t = std::time::Instant::now();
+            let r = crate::owl::scan_pitfalls(&index.ontologies);
+            if timing {
+                eprintln!("    pitfall scan {:.0} ms", t.elapsed().as_secs_f64() * 1e3);
+            }
+            r
+        });
+        (
+            c.join().expect("reasoner thread"),
+            p.join().expect("pitfall thread"),
+        )
+    });
+    let names: HashMap<&str, &Term> = index
+        .terms
+        .iter()
+        .filter(|t| t.origin == Origin::Statements)
+        .filter_map(|t| t.iri.as_deref().map(|i| (i, t)))
+        .collect();
+    let name = |iri: &str| -> String {
+        match names.get(iri) {
+            Some(t) if t.label != iri => {
+                format!("{} ({})", t.label, t.curie.as_deref().unwrap_or(iri))
+            }
+            _ => iri.to_string(),
+        }
+    };
+
+    let axioms: usize = index
+        .ontologies
+        .iter()
+        .map(|o| o.ontology.iter().count())
+        .sum();
+    let loaded: HashSet<&str> = index
+        .ontologies
+        .iter()
+        .filter_map(|o| o.iri.as_deref())
+        .collect();
+    let mut missing_imports: Vec<&str> = index
+        .ontologies
+        .iter()
+        .flat_map(|o| o.imports.iter().map(String::as_str))
+        .filter(|i| !loaded.contains(i))
+        .collect();
+    missing_imports.sort_unstable();
+    missing_imports.dedup();
+    let classes = pits.summary.num_classes as u64;
+
+    s.metric("ontology files read", index.ontologies.len());
+    s.metric("axioms and annotations", axioms);
+    s.metric(
+        "consistent (OWL 2 EL)",
+        if cons.consistent { "yes" } else { "no" },
+    );
+    s.metric("unsatisfiable classes", cons.unsatisfiable.len());
+    s.metric("imports not loaded", missing_imports.len());
+    for u in &cons.unsatisfiable {
+        s.findings.push(Finding {
+            check: "unsatisfiable class".into(),
+            element: name(u),
+            origin: Origin::Statements,
+            source: None,
+            status: None,
+            detail: "inferred equivalent to owl:Nothing (whelk)".into(),
+        });
+    }
+
+    // Pitfalls: one finding per affected element, marked with any decision the project recorded.
+    let mut by_importance: BTreeMap<&str, [u64; 2]> = BTreeMap::new();
+    let mut by_pitfall: BTreeMap<String, u64> = BTreeMap::new();
+    let (mut open, mut decided) = (0u64, 0u64);
+    for p in &pits.pitfalls {
+        let elements: Vec<&str> = if p.affected_elements.is_empty() {
+            vec!["(ontology)"]
+        } else {
+            p.affected_elements.iter().map(String::as_str).collect()
+        };
+        for e in elements {
+            let decision = index.decisions.iter().find(|d| d.covers(&p.id, e));
+            let slot = by_importance
+                .entry(importance_key(&p.importance))
+                .or_default();
+            match decision {
+                Some(_) => {
+                    decided += 1;
+                    slot[1] += 1;
+                }
+                None => {
+                    open += 1;
+                    slot[0] += 1;
+                }
+            }
+            *by_pitfall
+                .entry(format!("{} {}", p.id, p.title))
+                .or_default() += 1;
+            s.findings.push(Finding {
+                check: format!("pitfall {} · {}", p.id, p.title),
+                element: name(e),
+                origin: Origin::Statements,
+                source: Some(p.importance.clone()),
+                status: Some(
+                    decision
+                        .map(|d| d.decision.clone())
+                        .unwrap_or_else(|| "open".into()),
+                ),
+                detail: match decision {
+                    Some(d) if !d.reference.is_empty() => format!("{} ({})", d.reason, d.reference),
+                    Some(d) => d.reason.clone(),
+                    None => p.description.clone(),
+                },
+            });
+        }
+    }
+    s.metric("pitfall instances, open", open);
+    s.metric("pitfall instances, decided", decided);
+    s.charts.push(Chart::Ratio {
+        title: "Satisfiable classes".into(),
+        part: classes.saturating_sub(cons.unsatisfiable.len() as u64),
+        whole: classes,
+        direction: Direction::HigherIsBetter,
+    });
+    s.charts.push(Chart::Stacked {
+        title: "Pitfall instances by importance".into(),
+        series: vec!["open".into(), "decided".into()],
+        rows: IMPORTANCE
+            .iter()
+            .map(|i| Row {
+                label: (*i).to_string(),
+                values: by_importance.get(i).copied().unwrap_or_default().to_vec(),
+            })
+            .collect(),
+    });
+    s.charts.push(bars(
+        "Pitfall instances by pitfall (top 15)",
+        by_pitfall,
+        15,
+    ));
+    if !missing_imports.is_empty() {
+        s.notes.push(format!(
+            "Imports not loaded (add their files to the project folder to include them): {}. Parents and \
+             axioms in them are not seen, so consistency and the tree check cover only the files read.",
+            missing_imports.join(", ")
+        ));
+    }
+    s.notes.push(
+        "Consistency is OWL 2 EL reasoning with whelk over all files read; the pitfalls are OWL-MCP's 31 \
+         OOPS!-style checks, so the agent's tool and this report agree. Decisions come from decisions.json."
+            .into(),
+    );
+    s.finish()
+}
+
+fn importance_key(s: &str) -> &'static str {
+    IMPORTANCE
+        .iter()
+        .find(|i| i.eq_ignore_ascii_case(s))
+        .copied()
+        .unwrap_or("Minor")
 }

@@ -1,0 +1,1 @@
+{"pitfalls": [{"id": "P11", "elements": ["*"], "decision": "accepted", "reason": "Domain and range left open by design", "ref": "fixture"}]}

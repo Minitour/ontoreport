@@ -5,13 +5,16 @@
 //! (for people). The report is deterministic: the same inputs give the same output.
 
 pub mod desk;
+pub mod help;
 pub mod html;
 pub mod model;
+pub mod owl;
 pub mod report;
 pub mod sections;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use model::{Index, Origin};
 use report::{Chart, Direction, Kpi, Node, Overview, Report, Section, Tone};
@@ -19,27 +22,105 @@ use report::{Chart, Direction, Kpi, Node, Overview, Report, Section, Tone};
 /// The crate version, as published.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Read every input found under `path` (a project or desk data folder) into an index.
+/// Folders searched for inputs, relative to the project folder.
+const INPUT_DIRS: &[&str] = &["", "data", "ontology", "ontologies", "src/ontology", "qc"];
+
+/// Read every input found under `path` into an index. `path` is a project folder, a review-desk data
+/// folder, or a single ontology file. Ontology files are read in parallel.
 pub fn load(path: &Path) -> Result<Index, String> {
     let mut index = Index::default();
-    let dirs = [path.to_path_buf(), path.join("data")];
-    let mut read = 0;
-    for d in dirs.iter().filter(|d| d.is_dir()) {
-        read += desk::load(d, &mut index)?.len();
+    let mut owl_files: Vec<PathBuf> = Vec::new();
+    if path.is_file() {
+        if !owl::is_ontology_file(path) {
+            return Err(format!(
+                "{}: not an ontology file ({})",
+                path.display(),
+                owl::EXTENSIONS.join(", ")
+            ));
+        }
+        owl_files.push(path.to_path_buf());
+    } else {
+        for rel in INPUT_DIRS {
+            let d = if rel.is_empty() {
+                path.to_path_buf()
+            } else {
+                path.join(rel)
+            };
+            if !d.is_dir() {
+                continue;
+            }
+            desk::load(&d, &mut index)?;
+            let decisions = d.join("decisions.json");
+            if decisions.is_file() {
+                let text = fs::read_to_string(&decisions)
+                    .map_err(|e| format!("{}: {e}", decisions.display()))?;
+                let parsed: DecisionsFile = serde_json::from_str(&text)
+                    .map_err(|e| format!("{}: {e}", decisions.display()))?;
+                index
+                    .decisions
+                    .extend(parsed.pitfalls.into_iter().chain(parsed.findings));
+                index.inputs.push(decisions.display().to_string());
+            }
+            let mut found: Vec<PathBuf> = fs::read_dir(&d)
+                .map_err(|e| format!("{}: {e}", d.display()))?
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| owl::is_ontology_file(p))
+                .collect();
+            found.sort();
+            owl_files.extend(found);
+        }
     }
-    if read == 0 {
+    let loaded: Vec<Result<owl::LoadedOntology, String>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = owl_files
+            .iter()
+            .map(|p| scope.spawn(move || owl::load(p)))
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| {
+                h.join()
+                    .unwrap_or_else(|_| Err("the OWL reader failed on this file".to_string()))
+            })
+            .collect()
+    });
+    for (p, lo) in owl_files.iter().zip(loaded) {
+        match lo {
+            Ok(lo) => {
+                index.inputs.push(lo.path.display().to_string());
+                index.ontologies.push(lo);
+            }
+            // One unreadable file does not stop the report; it becomes a finding.
+            Err(e) => index.unreadable.push((p.display().to_string(), e)),
+        }
+    }
+    let owl_terms = owl::terms(&index.ontologies);
+    index.terms.splice(0..0, owl_terms);
+    if index.inputs.is_empty() {
+        if let Some((p, e)) = index.unreadable.first() {
+            return Err(format!("{p}: could not be read: {e}"));
+        }
         return Err(format!(
-            "{}: no inputs found (expected desk data: g0.json, groups.json or check.json)",
-            path.display()
+            "{}: no inputs found (expected ontology files: {}; or review-desk data: g0.json, groups.json, check.json)",
+            path.display(),
+            owl::EXTENSIONS.join(", ")
         ));
     }
     Ok(index)
 }
 
+#[derive(serde::Deserialize)]
+struct DecisionsFile {
+    #[serde(default)]
+    pitfalls: Vec<model::Decision>,
+    #[serde(default)]
+    findings: Vec<model::Decision>,
+}
+
 /// Run every section on the index. Sections are independent and run in parallel.
 pub fn report(index: &Index) -> Report {
     type Run = fn(&Index) -> Section;
-    let runs: [Run; 4] = [
+    let runs: [Run; 5] = [
+        sections::logic,
         sections::structure,
         sections::provenance,
         sections::traceability,
@@ -72,6 +153,7 @@ fn overview(index: &Index, sections: &[Section]) -> Overview {
         .count();
     let cands = index.terms.len() - files;
     kpis.push(Kpi {
+        help: None,
         label: "Terms".into(),
         value: thousands(index.terms.len() as u64),
         detail: format!(
@@ -88,6 +170,7 @@ fn overview(index: &Index, sections: &[Section]) -> Overview {
         .collect();
     if !sources.is_empty() {
         kpis.push(Kpi {
+            help: None,
             label: "Sources reused".into(),
             value: sources.len().to_string(),
             detail: "ontologies and vocabularies on the desk".into(),
@@ -106,6 +189,7 @@ fn overview(index: &Index, sections: &[Section]) -> Overview {
     }
     let total: usize = sections.iter().map(|s| s.findings.len()).sum();
     kpis.push(Kpi {
+        help: None,
         label: "Findings".into(),
         value: thousands(total as u64),
         detail: sections
@@ -130,7 +214,11 @@ fn overview(index: &Index, sections: &[Section]) -> Overview {
                 .source
                 .clone()
                 .unwrap_or_else(|| sections::origin_name(f.origin).to_string());
-            *by_check.entry(f.check).or_default().entry(src).or_default() += 1;
+            *by_check
+                .entry(f.check.as_str())
+                .or_default()
+                .entry(src)
+                .or_default() += 1;
         }
         let mut checks: Vec<Node> = by_check
             .into_iter()
@@ -165,6 +253,9 @@ fn overview(index: &Index, sections: &[Section]) -> Overview {
             values: vec![s.findings.len() as u64],
             children: checks,
         });
+    }
+    for k in &mut kpis {
+        k.help = help::about(&k.label);
     }
     Overview {
         kpis,
@@ -207,6 +298,7 @@ fn ratio_kpi(label: &str, s: &Section) -> Kpi {
         Some(part as f64 / whole as f64)
     };
     Kpi {
+        help: None,
         label: label.into(),
         value: share
             .map(|x| format!("{:.1}%", 100.0 * x))

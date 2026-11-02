@@ -1,0 +1,15 @@
+@prefix : <http://example.org/c#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/c> a owl:Ontology .
+:partOf a owl:ObjectProperty .
+:A a owl:Class ; rdfs:label "a" ; rdfs:subClassOf :B .
+:B a owl:Class ; rdfs:label "b" ; rdfs:subClassOf :A .
+:C a owl:Class ; rdfs:label "c" ; rdfs:subClassOf :D .
+:D a owl:Class ; rdfs:label "d" .
+# A part-of loop is not a hierarchy cycle.
+:E a owl:Class ; rdfs:label "e" ;
+    rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :partOf ; owl:someValuesFrom :F ] .
+:F a owl:Class ; rdfs:label "f" ;
+    rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :partOf ; owl:someValuesFrom :E ] .

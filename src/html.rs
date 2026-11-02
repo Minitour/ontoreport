@@ -69,6 +69,14 @@ details.find>summary .chip{margin-left:6px}.fbody{padding:0 12px 12px}
 .wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.84rem}
 th,td{border-bottom:1px solid var(--rule);padding:5px 8px;text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--paper)}
 details.about{margin:6px 0 0;font-size:.85rem;color:var(--muted)}details.about summary{cursor:pointer}
+.help{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;margin-left:5px;
+border-radius:50%;border:1px solid var(--muted);color:var(--muted);font-size:10px;font-weight:700;line-height:1;cursor:help;vertical-align:1px;
+text-transform:none;letter-spacing:0;flex:none}
+.help:hover,.help:focus{border-color:var(--accent);color:var(--accent);outline:none}
+.help .tip{display:none;position:absolute;z-index:20;left:50%;top:calc(100% + 7px);transform:translateX(-50%);width:max-content;max-width:300px;
+background:var(--fg);color:var(--bg);font-size:.78rem;font-weight:400;line-height:1.45;padding:8px 10px;border-radius:7px;
+box-shadow:0 6px 20px rgba(0,0,0,.25);white-space:normal;text-align:left}
+.help:hover .tip,.help:focus .tip,.help:focus-within .tip{display:block}
 footer{max-width:1240px;margin:0 auto;padding:0 16px 30px;color:var(--muted);font-size:.8rem}
 "#;
 
@@ -201,8 +209,9 @@ fn kpi(h: &mut String, k: &Kpi) {
     };
     let _ = write!(
         h,
-        "<div class=\"kpi {tone}\"><div class=\"l\">{}</div><div class=\"v\">{}</div><div class=\"d\">{}</div></div>",
+        "<div class=\"kpi {tone}\"><div class=\"l\">{}{}</div><div class=\"v\">{}</div><div class=\"d\">{}</div></div>",
         esc(&k.label),
+        help_icon(k.help),
         esc(&k.value),
         esc(&k.detail)
     );
@@ -242,7 +251,7 @@ fn section(h: &mut String, s: &Section) {
 
     let mut by_check: BTreeMap<&str, Vec<&Finding>> = BTreeMap::new();
     for f in &s.findings {
-        by_check.entry(f.check).or_default().push(f);
+        by_check.entry(f.check.as_str()).or_default().push(f);
     }
     for (n, (check, fs)) in by_check.into_iter().enumerate() {
         let id = format!("t-{}-{n}", s.id);
@@ -327,7 +336,12 @@ fn metrics(h: &mut String, s: &Section) {
         }
         let _ = write!(h, "</tr></thead><tbody>");
         for (measure, cells) in &rows {
-            let _ = write!(h, "<tr><td>{}</td>", esc(measure));
+            let _ = write!(
+                h,
+                "<tr><td>{}{}</td>",
+                esc(measure),
+                help_icon(crate::help::about(measure))
+            );
             for c in &cols {
                 let _ = write!(
                     h,
@@ -344,9 +358,10 @@ fn metrics(h: &mut String, s: &Section) {
         for m in tiles {
             let _ = write!(
                 h,
-                "<div class=\"metric\"><b>{}</b><span>{}</span></div>",
+                "<div class=\"metric\"><b>{}</b><span>{}{}</span></div>",
                 esc(&value_text(&m.value)),
-                esc(&m.name)
+                esc(&m.name),
+                help_icon(m.help)
             );
         }
         let _ = write!(h, "</div>");
@@ -364,9 +379,10 @@ fn chart_card(h: &mut String, c: &Chart, id: &str, wide: bool) {
     };
     let _ = write!(
         h,
-        "<div class=\"card{}\"><h3>{}</h3>",
+        "<div class=\"card{}\"><h3>{}{}</h3>",
         if wide { " wide" } else { "" },
-        esc(title)
+        esc(title),
+        help_icon(crate::help::about(title))
     );
     match c {
         Chart::Ratio {
@@ -633,6 +649,17 @@ fn legend_at(h: &mut String, shown: &[String], active: &[usize]) {
 }
 
 // ── text helpers ───────────────────────────────────────────────────────────
+
+/// A (?) icon that shows the explanation on hover, keyboard focus or tap (no JavaScript needed).
+fn help_icon(text: Option<&str>) -> String {
+    match text {
+        Some(t) => format!(
+            "<span class=\"help\" tabindex=\"0\" role=\"button\" aria-label=\"{0}\">?<span class=\"tip\" role=\"tooltip\">{0}</span></span>",
+            esc(t)
+        ),
+        None => String::new(),
+    }
+}
 
 fn value_text(v: &Value) -> String {
     match v {

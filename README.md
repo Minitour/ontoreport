@@ -8,35 +8,61 @@ whether every term traces to a requirement, every definition to a cited source, 
 to its source release, and how much of the ontology has been reviewed. One native binary per
 platform, written in Rust, distributed on npm and PyPI.
 
-> **Status: early development.** The published 0.0.1 is a placeholder. The current source reads
-> review-desk data (statement views of ontology files, candidate terms, the desk's own checks) and
-> reports Structure (classes without a path to the top class), Provenance (missing definitions,
-> weak sources), Traceability (what each group says it serves) and Review status. Reading OWL files
-> directly, consistency, pitfalls and reuse fidelity come next.
+> **Status: early development.** The published 0.0.1 is a placeholder; build from source for the
+> current version. Reuse fidelity, requirements coverage from a requirements file, review decisions
+> and corpus fit come next.
 
 ## Usage
 
 ```bash
-ontoreport <project-or-desk-folder> --out report.html
+ontoreport <project-folder | ontology-file> --out report.html
 ```
 
-Writes `report.html` and `report.json` (same content). The JSON is deterministic: the same inputs give
-the same bytes, so reports can be diffed and kept in version control. Run time goes to stderr.
+Writes `report.html` (a dashboard for people) and `report.json` (the same content for agents). The
+JSON is deterministic: the same inputs give the same bytes, so reports can be diffed and kept in
+version control. Run time goes to stderr; set `ONTOREPORT_TIMING=1` for the time of each check.
+
+Every metric, KPI and chart has a (?) icon that explains in plain words what it is and how it is
+measured; the JSON carries the same text in each metric's `help` field.
+
+## Inputs
+
+All inputs are optional; a section whose input is missing is marked "not run".
+
+| Input | Where it is looked for |
+|---|---|
+| Ontology files: RDF/XML (`.owl`, `.rdf`), OWL functional syntax (`.ofn`), Turtle (`.ttl`), N-Triples (`.nt`) | the folder, `ontology/`, `ontologies/`, `src/ontology/`, or a single file |
+| Review-desk data: `g0.json` (statements of an ontology file), `groups.json` (candidate terms), `check.json` (the desk's self-check) | the folder or `data/` |
+| Recorded decisions: `decisions.json` | the folder or `qc/` |
+
+A file that cannot be read is reported as a finding and the rest of the report goes ahead. Labels,
+definitions and definition sources are read from the RDF directly, so they count even when a file
+does not declare its annotation properties.
+
+`decisions.json` records decisions about findings, so the report shows the decision instead of
+raising the finding again:
+
+```json
+{
+  "pitfalls": [
+    {"id": "P11", "elements": ["*"], "decision": "accepted",
+     "reason": "domain and range left open, as in RO", "ref": "notebook E33"}
+  ]
+}
+```
 
 ## Sections
 
 | Section | What it reports |
 |---|---|
-| Structure | Consistency, unsatisfiable classes, pitfalls with their recorded decisions, classes without a path to the top class |
-| Reuse fidelity | Reused identifiers that are missing, deprecated or obsolete; labels and definitions that differ from the source release; exact matches that are not exact |
-| Traceability | Terms with no competency question, use case or goal; planned-answer terms missing from the ontology |
-| Provenance | Definitions without a cited source or locator; sources missing from the bibliography; identifiers that do not resolve |
-| Requirements coverage | Competency questions per module; modules without questions; questions answered by SPARQL |
-| Review status | Statements approved, debatable, removed or not yet reviewed |
-| Corpus fit (optional) | Domain coverage, relevance and concept-family coherence against a domain corpus |
+| Consistency and pitfalls | OWL 2 EL consistency and unsatisfiable classes (whelk); the 31 OOPS!-style pitfalls of OWL-MCP, each with its recorded decision; imports not loaded |
+| Structure | Classes without a path to the top class: BFO's *entity* when the project uses BFO, otherwise `owl:Thing` |
+| Provenance | Terms without a definition; definitions citing a weak source; definitions with their own source annotation |
+| Traceability | What each kept group on a review desk says it serves (competency questions, use cases) |
+| Review status | Candidate terms by source and status, with a drill-down by source, category and group |
 
-The report is deterministic: the same project gives the same findings. It is written twice, as a
-self-contained HTML page for people and as JSON for agents.
+Planned: reuse fidelity against source releases, requirements coverage, review decisions from a
+desk export, and corpus fit (domain coverage and concept-family coherence, with all-MiniLM-L6-v2).
 
 ## Install
 

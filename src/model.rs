@@ -64,6 +64,30 @@ pub struct InputCheck {
     pub summary: String,
 }
 
+/// A decision the project recorded about a finding, e.g. a pitfall accepted by design.
+#[derive(Debug, Clone, serde::Deserialize, Serialize)]
+pub struct Decision {
+    /// Pitfall code ("P11") or check name.
+    pub id: String,
+    /// Elements the decision covers; empty or "*" covers all.
+    #[serde(default)]
+    pub elements: Vec<String>,
+    /// "accepted", "fixed", "wontfix", ...
+    pub decision: String,
+    #[serde(default)]
+    pub reason: String,
+    /// Where the decision is recorded (e.g. "notebook E33").
+    #[serde(default, rename = "ref")]
+    pub reference: String,
+}
+
+impl Decision {
+    pub fn covers(&self, id: &str, element: &str) -> bool {
+        self.id.eq_ignore_ascii_case(id)
+            && (self.elements.is_empty() || self.elements.iter().any(|e| e == "*" || e == element))
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Index {
     pub terms: Vec<Term>,
@@ -72,6 +96,12 @@ pub struct Index {
     pub recorded: Vec<RecordedFinding>,
     pub input_checks: Vec<InputCheck>,
     pub inputs: Vec<String>,
+    /// Ontology files read directly (OWL, functional syntax, Turtle).
+    pub ontologies: Vec<crate::owl::LoadedOntology>,
+    /// Decisions recorded in the project (decisions.json).
+    pub decisions: Vec<Decision>,
+    /// Ontology files that could not be read, with the reason.
+    pub unreadable: Vec<(String, String)>,
 }
 
 impl Index {

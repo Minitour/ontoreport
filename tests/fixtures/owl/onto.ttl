@@ -1,0 +1,19 @@
+@prefix : <http://example.org/o#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix obo: <http://purl.obolibrary.org/obo/> .
+
+<http://example.org/o> a owl:Ontology ;
+    owl:imports <http://example.org/not-here> .
+
+:Animal a owl:Class ; rdfs:label "animal" ;
+    obo:IAO_0000115 "A living organism that moves." ;
+    obo:IAO_0000119 "https://doi.org/10.0000/example" .
+:Plant a owl:Class ; rdfs:label "plant" ;
+    obo:IAO_0000115 "A living organism that photosynthesizes. Source: https://en.wikipedia.org/wiki/Plant" .
+:Animal owl:disjointWith :Plant .
+:Hybrid a owl:Class ; rdfs:label "hybrid" ;
+    rdfs:subClassOf :Animal , :Plant .
+:Dog a owl:Class ; rdfs:label "dog" ; rdfs:subClassOf :Animal ;
+    obo:IAO_0000115 "A domesticated canine." .
+:partOf a owl:ObjectProperty ; rdfs:label "part of" .

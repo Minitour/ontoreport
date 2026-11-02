@@ -24,6 +24,12 @@ path = "src/lib.rs"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+horned-owl = "1.4"
+# Pinned past whelk's June 2026 rule fixes (#30, #31); the earlier revision OWL-MCP pins reports
+# false unsatisfiable classes and different results on each run.
+whelk = { git = "https://github.com/INCATools/whelk-rs", rev = "a1f7e54f62e1a5d8be6af73693076bc04c95faa9" }
+oxrdfio = "0.2"
+oxrdf = "0.3"
 
 [profile.release]
 lto = true

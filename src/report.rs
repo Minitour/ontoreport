@@ -36,6 +36,8 @@ pub struct Kpi {
     pub value: String,
     pub detail: String,
     pub tone: Tone,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub help: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -117,11 +119,14 @@ pub struct Section {
 pub struct Metric {
     pub name: String,
     pub value: Value,
+    /// What the metric is and how it is measured, in plain words.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub help: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Finding {
-    pub check: &'static str,
+    pub check: String,
     pub element: String,
     pub origin: Origin,
     /// Source ontology or section of a candidate term.
@@ -151,8 +156,10 @@ impl Section {
     }
 
     pub fn metric(&mut self, name: impl Into<String>, value: impl Into<Value>) {
+        let name = name.into();
         self.metrics.push(Metric {
-            name: name.into(),
+            help: crate::help::about(&name),
+            name,
             value: value.into(),
         });
     }
@@ -167,7 +174,7 @@ impl Section {
     /// Sort findings so the output does not depend on input order beyond what the input fixes.
     pub fn finish(mut self) -> Self {
         self.findings.sort_by(|a, b| {
-            (a.check, &a.element, a.origin as u8).cmp(&(b.check, &b.element, b.origin as u8))
+            (&a.check, &a.element, a.origin as u8).cmp(&(&b.check, &b.element, b.origin as u8))
         });
         self
     }

@@ -33,7 +33,7 @@ fn writes_html_and_json_reports() {
     let json: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.path().join("report.json")).unwrap()).unwrap();
     assert_eq!(json["tool"], "ontoreport");
-    assert_eq!(json["sections"].as_array().unwrap().len(), 4);
+    assert_eq!(json["sections"].as_array().unwrap().len(), 5);
 }
 
 #[test]

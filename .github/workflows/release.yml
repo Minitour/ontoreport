@@ -1,0 +1,327 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]*.[0-9]*.[0-9]*"
+  # Build everything without publishing (used once to bootstrap the npm packages
+  # before trusted publishing can be attached; see scripts/npm-bootstrap.sh).
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, e.g. 0.0.1"
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+  PLATFORMS: linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64
+
+permissions:
+  contents: read
+
+jobs:
+  # ── 1. Native binaries for npm ──────────────────────────────────────────────
+  # While the repository is private, every target is built on x64 runners
+  # (arm64 hosted runners are not available to private repositories on the
+  # free plan): Linux arm64 through cargo-zigbuild, macOS x64 from the arm64
+  # runner, Windows arm64 with the MSVC ARM64 tools on the x64 runner.
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu,  runner: ubuntu-latest,  npm_platform: linux-x64,    binary: ontoreport,     zig: false }
+          - { target: aarch64-unknown-linux-gnu, runner: ubuntu-latest,  npm_platform: linux-arm64,  binary: ontoreport,     zig: true }
+          - { target: x86_64-apple-darwin,       runner: macos-latest,   npm_platform: darwin-x64,   binary: ontoreport,     zig: false }
+          - { target: aarch64-apple-darwin,      runner: macos-latest,   npm_platform: darwin-arm64, binary: ontoreport,     zig: false }
+          - { target: x86_64-pc-windows-msvc,    runner: windows-latest, npm_platform: win32-x64,    binary: ontoreport.exe, zig: false }
+          - { target: aarch64-pc-windows-msvc,   runner: windows-latest, npm_platform: win32-arm64,  binary: ontoreport.exe, zig: false }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Set Cargo.toml version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
+          sed -i.bak "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+          rm -f Cargo.toml.bak
+
+      - name: Build
+        if: ${{ !matrix.zig }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build (cargo-zigbuild)
+        if: ${{ matrix.zig }}
+        run: |
+          python3 -m pip install --user ziglang cargo-zigbuild
+          cargo zigbuild --release --target ${{ matrix.target }}
+
+      - name: Stage binary
+        shell: bash
+        run: |
+          mkdir -p staging
+          cp target/${{ matrix.target }}/release/${{ matrix.binary }} staging/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.npm_platform }}
+          path: staging/${{ matrix.binary }}
+          if-no-files-found: error
+
+  # ── 2. Assemble npm packages (tarballs keep the executable bit) ─────────────
+  # Platform packages live in the @ontoreport org (npm's spam filter blocks
+  # new unscoped "*-win32-x64" names); `npm pack` names them ontoreport-ontoreport-<platform>-<v>.tgz.
+  package-npm:
+    name: Package (npm)
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Derive version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: echo "VERSION=${INPUT_VERSION:-${GITHUB_REF_NAME#v}}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: artifacts
+
+      - name: Build platform and main packages
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for PLATFORM in $PLATFORMS; do
+            OS="${PLATFORM%-*}"; CPU="${PLATFORM#*-}"
+            BINARY="ontoreport"; [ "$OS" = "win32" ] && BINARY="ontoreport.exe"
+            DIR="pkg/ontoreport-${PLATFORM}"
+            mkdir -p "$DIR/bin"
+            cp "artifacts/binary-${PLATFORM}/${BINARY}" "$DIR/bin/${BINARY}"
+            chmod 755 "$DIR/bin/${BINARY}"
+            cat > "$DIR/package.json" <<PKGJSON
+          {
+            "name": "@ontoreport/ontoreport-${PLATFORM}",
+            "version": "${VERSION}",
+            "description": "ontoreport native binary for ${OS}/${CPU}",
+            "os": ["${OS}"],
+            "cpu": ["${CPU}"],
+            "license": "MIT",
+            "files": ["bin"],
+            "repository": { "type": "git", "url": "https://github.com/Minitour/ontoreport.git" }
+          }
+          PKGJSON
+            (cd dist && npm pack "../$DIR")
+          done
+
+          cp README.md npm/README.md
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('npm/package.json', 'utf8'));
+            pkg.version = process.env.VERSION;
+            for (const k of Object.keys(pkg.optionalDependencies || {})) pkg.optionalDependencies[k] = process.env.VERSION;
+            fs.writeFileSync('npm/package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          (cd dist && npm pack ../npm)
+          ls -la dist
+
+      - name: Upload npm packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-packages
+          path: dist/*.tgz
+          if-no-files-found: error
+
+  # ── 3. Python wheels (the binary packaged with maturin, bindings = "bin") ───
+  wheels:
+    name: Wheel ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest,  target: x86_64,  manylinux: auto }
+          - { runner: ubuntu-latest,  target: aarch64, manylinux: auto }
+          - { runner: macos-latest,   target: x86_64,  manylinux: "" }
+          - { runner: macos-latest,   target: aarch64, manylinux: "" }
+          - { runner: windows-latest, target: x64,     manylinux: "" }
+          - { runner: windows-latest, target: aarch64, manylinux: "" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Cargo.toml version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
+          sed -i.bak "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+          rm -f Cargo.toml.bak
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --out dist
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ runner.os }}-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: Source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Cargo.toml version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
+          sed -i.bak "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+          rm -f Cargo.toml.bak
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  # ── 4. Publish to npm via trusted publishing (no npm token anywhere) ────────
+  publish-npm:
+    name: Publish (npm)
+    needs: package-npm
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # npm trusted publishing (OIDC)
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      # trusted publishing needs npm >= 11.5.1 (pinned to 11: npm 12 needs a newer Node)
+      - name: Update npm
+        run: npm install -g "npm@^11.15.0"
+
+      - name: Download npm packages
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-packages
+          path: dist
+
+      - name: Publish (platform packages first, then ontoreport)
+        shell: bash
+        env:
+          VERSION: ${{ needs.package-npm.outputs.version }}
+        run: |
+          set -euo pipefail
+          # no token: npm authenticates with the GitHub OIDC identity
+          unset NODE_AUTH_TOKEN || true
+          publish() {
+            set +e
+            OUTPUT=$(npm publish "$1" --access public 2>&1); CODE=$?
+            set -e
+            if [ $CODE -ne 0 ]; then
+              if echo "$OUTPUT" | grep -qi "previously published"; then
+                echo "skip $1 (already published)"
+              else
+                echo "$OUTPUT" >&2; exit $CODE
+              fi
+            else
+              echo "$OUTPUT"
+            fi
+          }
+          for PLATFORM in $PLATFORMS; do
+            publish "./dist/ontoreport-ontoreport-${PLATFORM}-${VERSION}.tgz"
+          done
+          publish "./dist/ontoreport-${VERSION}.tgz"
+
+  # ── 5. Publish to PyPI via a trusted publisher (no PyPI token anywhere) ─────
+  # Needs a (pending) trusted publisher on pypi.org: project "ontoreport",
+  # owner Minitour, repository ontoreport, workflow release.yml, environment pypi.
+  publish-pypi:
+    name: Publish (PyPI)
+    needs: [wheels, sdist]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ontoreport
+    permissions:
+      id-token: write   # PyPI trusted publishing (OIDC)
+    steps:
+      - name: Download wheels and sdist
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Digital attestations publish the repository identity to a public
+          # transparency log; switch this on when the repository goes public.
+          attestations: false
+          skip-existing: true
+
+  # ── 6. GitHub release ───────────────────────────────────────────────────────
+  release:
+    name: GitHub release
+    needs: [package-npm, publish-npm, publish-pypi]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "v${{ needs.package-npm.outputs.version }}"
+          generate_release_notes: true

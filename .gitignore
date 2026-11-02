@@ -1,0 +1,7 @@
+/target/
+/dist/
+/npm/node_modules/
+/npm/README.md
+__pycache__/
+*.whl
+.*.tmp

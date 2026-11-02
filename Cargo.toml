@@ -1,0 +1,29 @@
+[package]
+name = "ontoreport"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.88"
+description = "Quality report for OWL ontologies built from the project record: structure, reuse fidelity, traceability, provenance, requirements and review status"
+authors = ["Antonio Zaitoun <antonio@zaitoun.dev>"]
+license = "MIT"
+repository = "https://github.com/Minitour/ontoreport"
+homepage = "https://github.com/Minitour/ontoreport"
+readme = "README.md"
+keywords = ["ontology", "owl", "evaluation", "quality", "report"]
+categories = ["command-line-utilities", "science"]
+
+[[bin]]
+name = "ontoreport"
+path = "src/main.rs"
+
+[lib]
+name = "ontoreport"
+path = "src/lib.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

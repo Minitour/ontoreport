@@ -1,0 +1,40 @@
+{
+  "name": "ontoreport",
+  "version": "0.0.1",
+  "description": "Quality report for OWL ontologies built from the project record",
+  "homepage": "https://github.com/Minitour/ontoreport",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Minitour/ontoreport.git"
+  },
+  "author": "Antonio Zaitoun <antonio@zaitoun.dev>",
+  "license": "MIT",
+  "keywords": [
+    "ontology",
+    "owl",
+    "ontology-evaluation",
+    "quality",
+    "report"
+  ],
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "bin": {
+    "ontoreport": "./bin/ontoreport.js"
+  },
+  "scripts": {
+    "postinstall": "node ./bin/install.js"
+  },
+  "optionalDependencies": {
+    "@ontoreport/ontoreport-linux-x64": "0.0.1",
+    "@ontoreport/ontoreport-linux-arm64": "0.0.1",
+    "@ontoreport/ontoreport-darwin-x64": "0.0.1",
+    "@ontoreport/ontoreport-darwin-arm64": "0.0.1",
+    "@ontoreport/ontoreport-win32-x64": "0.0.1",
+    "@ontoreport/ontoreport-win32-arm64": "0.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

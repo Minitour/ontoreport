@@ -1,0 +1,29 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "ontoreport"
+description = "Quality report for OWL ontologies built from the project record"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Antonio Zaitoun", email = "antonio@zaitoun.dev" }]
+keywords = ["ontology", "owl", "evaluation", "quality", "report"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/Minitour/ontoreport"
+Repository = "https://github.com/Minitour/ontoreport"
+
+[tool.maturin]
+bindings = "bin"
+strip = true

@@ -191,6 +191,8 @@ fn statement_term(p: Page) -> Option<Term> {
     }
     Some(Term {
         key: p.title.to_lowercase(),
+        labels: vec![p.title.clone()],
+        parent_iris: Vec::new(),
         label: p.title,
         curie: p.cu,
         iri: p.iri,
@@ -229,6 +231,8 @@ fn load_groups(g: Groups, index: &mut Index) {
                     let info = gr.info.get(label);
                     index.terms.push(Term {
                         key: label.to_lowercase(),
+                        labels: vec![label.clone()],
+                        parent_iris: Vec::new(),
                         label: label.clone(),
                         curie: info.and_then(|i| i.i.clone()),
                         iri: info.and_then(|i| i.u.clone()),

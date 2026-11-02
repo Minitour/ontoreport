@@ -457,13 +457,23 @@ pub fn terms(ontologies: &[LoadedOntology]) -> Vec<Term> {
                 .unwrap_or_else(|| local_name(iri));
             Term {
                 key: key_of(iri),
-                label,
+                label: label.clone(),
                 curie: Some(curie(iri)),
                 iri: Some(iri.clone()),
                 kind: f.kind.unwrap_or("").to_string(),
                 definitions: f.definitions.clone(),
                 definition_sources: f.definition_sources.clone(),
                 parents: f.parents.iter().map(|p| key_of(p)).collect(),
+                parent_iris: f.parents.iter().cloned().collect(),
+                labels: {
+                    let mut l = f.labels.clone();
+                    l.sort();
+                    l.dedup();
+                    if l.is_empty() {
+                        l.push(label.clone());
+                    }
+                    l
+                },
                 origin: Origin::Statements,
                 source: None,
                 release: None,

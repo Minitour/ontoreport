@@ -138,6 +138,76 @@ pub fn about(name: &str) -> Option<&'static str> {
             "The review desk's candidates broken down by source, then the desk's category, then the group, \
              with the In / Debatable / Out counts at each level. Click a row to open the level below."
         }
+
+        // ── semantic coherence ──────────────────────────────────────────
+        "concept families scored" => {
+            "How many concept families were scored. A concept family is a class with two or more direct \
+             subclasses: the parent and its children."
+        }
+        "mean css" | "mean css in the subset" => {
+            "Child Similarity Score: how alike the children of a family are. Each class is turned into a vector \
+             by a sentence-embedding model; CSS is the average cosine similarity over every pair of siblings, \
+             averaged over all families. Higher means siblings are more alike, as siblings should be."
+        }
+        "mean pss" | "mean pss in the subset" => {
+            "Parent Similarity Score: how alike each child is to its parent, as the average cosine similarity \
+             between the parent's vector and each child's vector, averaged over all families."
+        }
+        "mean pda" | "mean pda in the subset" => {
+            "Parent Difference Agreement: whether the children differ from their parent by about the same \
+             amount. It is one minus the standard deviation of the parent-child similarities, averaged over \
+             all families. Close to 1 means the children sit at an even distance from the parent."
+        }
+        "children that may not belong" | "child may not belong under its parent" => {
+            "Children whose family scores better without them. For each child of a family with three or more \
+             children, the report compares the family's sibling similarity and agreement with and without it \
+             (diff = 0.05 × change in PDA + 0.95 × change in CSS). Below −0.012 the child is flagged, the rule \
+             validated against domain experts in 2023. A flag is a candidate for review, not an error."
+        }
+        "concept families by sibling similarity" => {
+            "How many families fall in each band of sibling similarity (CSS). Families in the low bands have \
+             children that the model sees as unrelated to each other."
+        }
+        "parents with the most children that may not belong" => {
+            "The parents whose families have the most flagged children: the places in the hierarchy most \
+             worth a look."
+        }
+
+        // ── corpus fit ──────────────────────────────────────────────────
+        "domain concepts" => {
+            "How many concepts the domain-concept list holds after normalization. The list is extracted from a \
+             corpus of the domain's literature (in 2023, 10,000 oceanography papers), keeping concepts that \
+             appear in at least ten papers."
+        }
+        "classes compared" => "How many classes were compared with the domain concepts.",
+        "shared concepts" => {
+            "Concepts that are both a class label and a domain concept, after lower-casing and reducing \
+             plural nouns to the singular."
+        }
+        "classes in the domain-relevant subset" => {
+            "The part of the ontology that touches the domain: classes with a shared label, every ancestor of \
+             those classes, and their direct children."
+        }
+        "domain coverage" => {
+            "How much of the domain the ontology covers: shared concepts divided by domain concepts. It measures \
+             completeness. Higher is better."
+        }
+        "ontology relevance" => {
+            "How much of the ontology is about the domain: shared concepts divided by all classes. It measures \
+             conciseness. A large general ontology scores low even when it holds much of the domain."
+        }
+        "sub-ontology relevance" => {
+            "Relevance within the domain-relevant subset: shared concepts divided by the classes in the subset. \
+             It shows how focused the part of the ontology that touches the domain is."
+        }
+        "frequent domain concepts the ontology lacks, by papers" => {
+            "Domain concepts with no matching class, by the number of papers that mention them: the most \
+             frequent gaps first. Candidates to add, after checking that they are concepts and not general words."
+        }
+        "families in the subset" => {
+            "Concept families inside the domain-relevant subset, as the 2023 evaluation scored them: a parent in \
+             the subset with the children the subset keeps."
+        }
         _ => return None,
     };
     Some(text)

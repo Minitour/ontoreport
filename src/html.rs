@@ -673,7 +673,7 @@ fn value_text(v: &Value) -> String {
 }
 
 /// Only the last two path components, so the page does not expose a machine's folder layout.
-fn short_path(p: &str) -> String {
+pub(crate) fn short_path(p: &str) -> String {
     let parts: Vec<&str> = p.split(['/', '\\']).filter(|x| !x.is_empty()).collect();
     parts[parts.len().saturating_sub(2)..].join("/")
 }

@@ -21,14 +21,14 @@ const WEAK_SOURCES: &[&str] = &["wikipedia.org", "wikipedia"];
 /// Review statuses in display order; anything else is grouped under "other".
 pub const STATUSES: &[&str] = &["in", "debatable", "out", "other"];
 
-fn in_scope(t: &Term) -> bool {
+pub(crate) fn in_scope(t: &Term) -> bool {
     match t.origin {
         Origin::Statements => true,
         Origin::Candidates => t.group.as_ref().and_then(|g| g.status.as_deref()) != Some("out"),
     }
 }
 
-fn status(t: &Term) -> Option<String> {
+pub(crate) fn status(t: &Term) -> Option<String> {
     t.group.as_ref().and_then(|g| g.status.clone())
 }
 

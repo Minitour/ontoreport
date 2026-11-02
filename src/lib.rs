@@ -4,7 +4,10 @@
 //! data and findings; an overview summarizes them; the report is written as JSON (for agents) and HTML
 //! (for people). The report is deterministic: the same inputs give the same output.
 
+pub mod config;
+pub mod corpus;
 pub mod desk;
+pub mod embed;
 pub mod help;
 pub mod html;
 pub mod model;
@@ -23,7 +26,23 @@ use report::{Chart, Direction, Kpi, Node, Overview, Report, Section, Tone};
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Folders searched for inputs, relative to the project folder.
-const INPUT_DIRS: &[&str] = &["", "data", "ontology", "ontologies", "src/ontology", "qc"];
+const INPUT_DIRS: &[&str] = &[
+    "",
+    "data",
+    "ontology",
+    "ontologies",
+    "src/ontology",
+    "qc",
+    "corpus",
+];
+
+/// Domain-concept files looked for in the input folders, in this order.
+const CONCEPT_FILES: &[&str] = &[
+    "concepts.json",
+    "concepts.txt",
+    "domain-concepts.json",
+    "domain-concepts.txt",
+];
 
 /// Read every input found under `path` into an index. `path` is a project folder, a review-desk data
 /// folder, or a single ontology file. Ontology files are read in parallel.
@@ -60,6 +79,16 @@ pub fn load(path: &Path) -> Result<Index, String> {
                     .decisions
                     .extend(parsed.pitfalls.into_iter().chain(parsed.findings));
                 index.inputs.push(decisions.display().to_string());
+            }
+            if index.domain.is_none() {
+                if let Some(c) = CONCEPT_FILES
+                    .iter()
+                    .map(|f| d.join(f))
+                    .find(|p| p.is_file())
+                {
+                    index.domain = Some(corpus::load_concepts(&c)?);
+                    index.inputs.push(c.display().to_string());
+                }
             }
             let mut found: Vec<PathBuf> = fs::read_dir(&d)
                 .map_err(|e| format!("{}: {e}", d.display()))?
@@ -116,8 +145,17 @@ struct DecisionsFile {
     findings: Vec<model::Decision>,
 }
 
-/// Run every section on the index. Sections are independent and run in parallel.
+/// Run every section on the index, without embeddings: the coherence section is marked not run and
+/// corpus fit reports coverage and relevance only.
 pub fn report(index: &Index) -> Report {
+    report_with(
+        index,
+        &Err("Run without a sentence-embedding model.".to_string()),
+    )
+}
+
+/// Run every section on the index. Sections are independent and run in parallel.
+pub fn report_with(index: &Index, emb: &corpus::Embeddings) -> Report {
     type Run = fn(&Index) -> Section;
     let runs: [Run; 5] = [
         sections::logic,
@@ -127,7 +165,9 @@ pub fn report(index: &Index) -> Report {
         sections::review,
     ];
     let sections: Vec<Section> = std::thread::scope(|scope| {
-        let handles: Vec<_> = runs.iter().map(|f| scope.spawn(move || f(index))).collect();
+        let mut handles: Vec<_> = runs.iter().map(|f| scope.spawn(move || f(index))).collect();
+        handles.push(scope.spawn(move || corpus::coherence(index, emb)));
+        handles.push(scope.spawn(move || corpus::corpus_fit(index, emb)));
         handles
             .into_iter()
             .map(|h| h.join().expect("section thread"))

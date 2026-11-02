@@ -1,0 +1,6 @@
+# concept<TAB>papers
+Lakes	30
+river	20
+sediment	50
+temperature	10
+mountains	5

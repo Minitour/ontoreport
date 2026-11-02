@@ -30,6 +30,13 @@ horned-owl = "1.4"
 whelk = { git = "https://github.com/INCATools/whelk-rs", rev = "a1f7e54f62e1a5d8be6af73693076bc04c95faa9" }
 oxrdfio = "0.2"
 oxrdf = "0.3"
+# Sentence embeddings for the coherence and corpus-fit sections: pure Rust, so every release target
+# builds without a native runtime. The model is downloaded on first use (see src/config.rs).
+candle-core = "=0.9.1"
+candle-nn = "=0.9.1"
+candle-transformers = "=0.9.1"
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+toml = "0.9"
 
 [profile.release]
 lto = true

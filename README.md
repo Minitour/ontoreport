@@ -9,13 +9,13 @@ to its source release, and how much of the ontology has been reviewed. One nativ
 platform, written in Rust, distributed on npm and PyPI.
 
 > **Status: early development.** The published 0.0.1 is a placeholder; build from source for the
-> current version. Reuse fidelity, requirements coverage from a requirements file, review decisions
-> and corpus fit come next.
+> current version. Reuse fidelity, requirements coverage from a requirements file and review
+> decisions come next.
 
 ## Usage
 
 ```bash
-ontoreport <project-folder | ontology-file> --out report.html
+ontoreport <project-folder | ontology-file> --out report.html [--concepts concepts.json]
 ```
 
 Writes `report.html` (a dashboard for people) and `report.json` (the same content for agents). The
@@ -34,6 +34,7 @@ All inputs are optional; a section whose input is missing is marked "not run".
 | Ontology files: RDF/XML (`.owl`, `.rdf`), OWL functional syntax (`.ofn`), Turtle (`.ttl`), N-Triples (`.nt`) | the folder, `ontology/`, `ontologies/`, `src/ontology/`, or a single file |
 | Review-desk data: `g0.json` (statements of an ontology file), `groups.json` (candidate terms), `check.json` (the desk's self-check) | the folder or `data/` |
 | Recorded decisions: `decisions.json` | the folder or `qc/` |
+| Domain concepts: `concepts.json` or `concepts.txt` (or `--concepts FILE`) | the folder or `corpus/` |
 
 A file that cannot be read is reported as a finding and the rest of the report goes ahead. Labels,
 definitions and definition sources are read from the RDF directly, so they count even when a file
@@ -60,9 +61,60 @@ raising the finding again:
 | Provenance | Terms without a definition; definitions citing a weak source; definitions with their own source annotation |
 | Traceability | What each kept group on a review desk says it serves (competency questions, use cases) |
 | Review status | Candidate terms by source and status, with a drill-down by source, category and group |
+| Semantic coherence | CSS, PSS and PDA of every concept family (a class with two or more subclasses), from sentence embeddings; children whose family scores better without them |
+| Corpus fit | Domain coverage, ontology relevance and sub-ontology relevance against a domain-concept list; the most frequent domain concepts the ontology lacks; CSS, PSS and PDA of the domain-relevant subset |
 
-Planned: reuse fidelity against source releases, requirements coverage, review decisions from a
-desk export, and corpus fit (domain coverage and concept-family coherence, with all-MiniLM-L6-v2).
+Planned: reuse fidelity against source releases, requirements coverage, and review decisions from a
+desk export.
+
+### Coherence and corpus fit
+
+These two sections implement the measures of Zaitoun, Sagi and Hose, *Automated Ontology Evaluation:
+Evaluating Coverage and Correctness using a Domain Corpus* (WWW '23 Companion). In 2023 the
+embeddings came from a BERT model pre-trained on the domain corpus; ontoreport uses a general
+sentence-embedding model, all-MiniLM-L6-v2 by default, which agreed better with the 2023 domain
+experts (AUC 0.95 against 0.89 on the 326 labelled ENVO pairs, labels with definitions) and runs on
+any CPU. A child is flagged as possibly misplaced by the 2023 rule: removing it raises
+`0.05·PDA + 0.95·CSS` of its family by more than 0.012.
+
+On the 2023 ontologies and concept list, coverage and relevance reproduce the published table:
+
+| | Classes | Domain-relevant subset | Ontology relevance | Sub-ontology relevance | Domain coverage |
+|---|---|---|---|---|---|
+| ENVO (2023) | 6,566 | 2,585 | 0.11 | 0.28 | 0.05 |
+| ENVO (ontoreport) | 6,566 | 2,555 | 0.108 | 0.279 | 0.048 |
+| OMIT (2023) | 87,816 | 5,379 | 0.01 | 0.26 | 0.10 |
+| OMIT (ontoreport) | 87,816 | 5,558 | 0.017 | 0.261 | 0.098 |
+| SWEET (2023) | 4,533 | 3,241 | 0.34 | 0.48 | 0.11 |
+| SWEET (ontoreport) | 4,532 | 3,238 | 0.349 | 0.488 | 0.107 |
+
+The small differences come from normalization: 2023 used spaCy's lemmatizer, ontoreport a fixed rule
+set for plural nouns. CSS and PSS are lower than in 2023 by design (a different model); compare
+them between ontologies or versions under the same model, not with the 2023 values.
+
+## Configuration
+
+The first run writes `~/.ontoreport/config.toml` (or `$ONTOREPORT_HOME/config.toml`) with every
+setting and its default, commented:
+
+```toml
+[model]
+repo = "sentence-transformers/all-MiniLM-L6-v2"  # any BERT-family model with model.safetensors
+revision = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"  # pinned commit
+pooling = "mean"         # or "cls" (BGE)
+max_tokens = 128
+batch_size = 8
+# dir = "D:/models"      # default: ~/.ontoreport/models
+
+[text]
+form = "label+definition"  # or "label", as in 2023
+```
+
+The model is downloaded with `curl` into `~/.ontoreport/models/<repo>/<revision>/` the first time a
+report needs it (about 91 MB for the default), and vectors are cached in `~/.ontoreport/cache/`, so
+a second report on the same ontology embeds nothing and is byte-identical to the first. Embedding
+runs one batch per CPU core: ENVO's 3,917 class labels take about 2 s on 32 threads, OMIT's 26,255
+about 16 s. `--config FILE` reads another configuration file; `--no-embeddings` skips the model.
 
 ## Install
 

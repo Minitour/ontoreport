@@ -28,6 +28,12 @@ pub struct Term {
     pub definition_sources: Vec<String>,
     /// Parent labels (lower-cased for lookup by `Index::by_label`).
     pub parents: Vec<String>,
+    /// Parent IRIs, when the input names parents by IRI (ontology files). Empty otherwise.
+    #[serde(skip)]
+    pub parent_iris: Vec<String>,
+    /// Every label the input gives the term, `label` among them.
+    #[serde(skip)]
+    pub labels: Vec<String>,
     pub origin: Origin,
     /// Source ontology or section the term was taken from.
     pub source: Option<String>,
@@ -102,6 +108,8 @@ pub struct Index {
     pub decisions: Vec<Decision>,
     /// Ontology files that could not be read, with the reason.
     pub unreadable: Vec<(String, String)>,
+    /// Concepts extracted from a domain corpus, for the corpus-fit section.
+    pub domain: Option<crate::corpus::DomainConcepts>,
 }
 
 impl Index {

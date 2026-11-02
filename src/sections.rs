@@ -673,7 +673,7 @@ fn logic_checks(index: &Index) -> Section {
     s.metric("ontology files read", index.ontologies.len());
     s.metric("axioms and annotations", axioms);
     s.metric(
-        "consistent (OWL 2 EL)",
+        "consistent under OWL 2 EL",
         if cons.consistent { "yes" } else { "no" },
     );
     s.metric("unsatisfiable classes", cons.unsatisfiable.len());

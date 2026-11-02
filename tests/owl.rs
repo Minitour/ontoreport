@@ -53,7 +53,7 @@ fn turtle_is_read_and_terms_indexed() {
 fn reasoner_finds_the_class_under_two_disjoint_parents() {
     let r = run("onto.ttl");
     let s = section(&r, "logic");
-    assert_eq!(metric(s, "consistent (OWL 2 EL)"), "no");
+    assert_eq!(metric(s, "consistent under OWL 2 EL"), "no");
     assert_eq!(metric(s, "unsatisfiable classes"), 1);
     let unsat: Vec<&str> = s
         .findings

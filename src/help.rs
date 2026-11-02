@@ -60,7 +60,7 @@ pub fn about(name: &str) -> Option<&'static str> {
             "How many statements the files contain: class and property declarations, logical axioms (such as \
              'A is a kind of B') and annotations (labels, definitions)."
         }
-        "consistent" => {
+        "consistent under owl 2 el" => {
             "Whether the ontology can be true at all. A reasoner (whelk, OWL 2 EL) checks whether the axioms \
              force the top class, or any named class, to have no members. 'no' means something contradicts."
         }

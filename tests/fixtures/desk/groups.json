@@ -1,0 +1,18 @@
+{
+ "sources": [
+  {"source": "EX", "release": "2026-01-01", "categories": [{"name": "c", "groups": [
+   {"id": "g-in", "name": "Kept group", "terms": ["water sample", "chart"], "status": "in", "serves": "A1, B12 (values)",
+    "info": {
+     "water sample": {"i": "EX:1", "u": "http://example.org/E1", "d": "A sample of water.", "ds": ["EX:9"], "p": ["sample"], "k": "class"},
+     "chart": {"i": "EX:2", "u": "http://example.org/E2", "d": "A graphic. Source: https://en.wikipedia.org/wiki/Chart", "p": ["broken link"], "k": "class"}}},
+   {"id": "g-why", "name": "Reasoned group", "terms": ["undefined thing"], "status": "debatable", "why": "Needed by the core.",
+    "info": {"undefined thing": {"i": "EX:3", "d": "", "p": ["chained parent"], "k": "class"}}},
+   {"id": "g-none", "name": "Unjustified group", "terms": ["loose term"], "status": "in",
+    "info": {"loose term": {"i": "EX:4", "d": "Something.", "p": ["entity"], "k": "class"}}},
+   {"id": "g-out", "name": "Dropped group", "terms": ["dropped term"], "status": "out",
+    "info": {"dropped term": {"i": "EX:5", "d": "", "p": [], "k": "class"}}}
+  ]}]}
+ ],
+ "chain": {"chained parent": {"p": ["entity"]}},
+ "root_errors": [{"term": "chart", "section": "EX", "why": "no parent chain to entity"}]
+}

@@ -1,0 +1,12 @@
+[
+ {"id": "T1", "title": "entity", "iri": "http://example.org/T1", "cu": "ex:T1", "k": "class",
+  "lines": [{"pl": "elucidation", "k": "definition", "lv": "Anything that exists."}]},
+ {"id": "T2", "title": "sample", "iri": "http://example.org/T2", "cu": "ex:T2", "k": "class",
+  "lines": [{"pl": "rdfs:subClassOf", "ol": "entity", "k": "axiom"},
+            {"pl": "definition", "k": "definition", "lv": "A portion of material taken for study."},
+            {"pl": "definition source", "lv": "https://doi.org/10.0000/example"}]},
+ {"id": "T3", "title": "orphan class", "iri": "http://example.org/T3", "cu": "ex:T3", "k": "class",
+  "lines": [{"pl": "rdfs:subClassOf", "ol": "missing parent", "k": "axiom"}]},
+ {"id": "T4", "title": "editor note", "iri": "http://example.org/T4", "cu": "ex:T4", "k": "annotation property", "lines": []},
+ {"id": "T5", "title": "My ontology", "k": "ontology", "lines": []}
+]

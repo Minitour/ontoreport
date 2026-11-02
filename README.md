@@ -8,10 +8,22 @@ whether every term traces to a requirement, every definition to a cited source, 
 to its source release, and how much of the ontology has been reviewed. One native binary per
 platform, written in Rust, distributed on npm and PyPI.
 
-> **Status: placeholder release.** Versions 0.0.x reserve the package names. The report is under
-> development; running it prints a notice and exits with code 2.
+> **Status: early development.** The published 0.0.1 is a placeholder. The current source reads
+> review-desk data (statement views of ontology files, candidate terms, the desk's own checks) and
+> reports Structure (classes without a path to the top class), Provenance (missing definitions,
+> weak sources), Traceability (what each group says it serves) and Review status. Reading OWL files
+> directly, consistency, pitfalls and reuse fidelity come next.
 
-## Planned sections
+## Usage
+
+```bash
+ontoreport <project-or-desk-folder> --out report.html
+```
+
+Writes `report.html` and `report.json` (same content). The JSON is deterministic: the same inputs give
+the same bytes, so reports can be diffed and kept in version control. Run time goes to stderr.
+
+## Sections
 
 | Section | What it reports |
 |---|---|

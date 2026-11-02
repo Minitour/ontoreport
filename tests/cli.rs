@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::Command;
 
 fn bin() -> Command {
@@ -13,8 +14,32 @@ fn prints_version() {
 }
 
 #[test]
-fn placeholder_exits_with_message() {
-    let out = bin().arg(".").output().expect("run ontoreport");
-    assert_eq!(out.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("placeholder release"));
+fn writes_html_and_json_reports() {
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/desk");
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("report.html");
+    let res = bin()
+        .arg(&fixture)
+        .arg("--out")
+        .arg(&out)
+        .output()
+        .expect("run ontoreport");
+    assert!(
+        res.status.success(),
+        "{}",
+        String::from_utf8_lossy(&res.stderr)
+    );
+    assert!(out.is_file());
+    let json: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.path().join("report.json")).unwrap()).unwrap();
+    assert_eq!(json["tool"], "ontoreport");
+    assert_eq!(json["sections"].as_array().unwrap().len(), 4);
+}
+
+#[test]
+fn folder_without_inputs_exits_with_code_2() {
+    let dir = tempfile::tempdir().unwrap();
+    let res = bin().arg(dir.path()).output().expect("run ontoreport");
+    assert_eq!(res.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&res.stderr).contains("no inputs found"));
 }

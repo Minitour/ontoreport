@@ -87,6 +87,18 @@ t.querySelectorAll('tbody tr').forEach(function(r){r.style.display=r.textContent
 document.querySelectorAll('button[data-tree]').forEach(function(b){b.addEventListener('click',function(){
 var open=b.dataset.open!=='1';b.dataset.open=open?'1':'0';b.textContent=open?'Collapse all':'Expand all';
 document.getElementById(b.dataset.tree).querySelectorAll('details').forEach(function(d){d.open=open});});});
+// Tooltips are placed against the window, so a scrolling table cannot cut them off: below the icon when
+// they fit, above otherwise, and kept inside the window's width.
+var shown=null;
+function place(icon){var tip=icon.querySelector('.tip');if(!tip)return;
+tip.style.position='fixed';tip.style.transform='none';tip.style.left='0px';tip.style.top='0px';
+var r=icon.getBoundingClientRect(),w=tip.offsetWidth,ht=tip.offsetHeight,vw=document.documentElement.clientWidth,vh=window.innerHeight;
+var x=Math.min(Math.max(8,r.left+r.width/2-w/2),vw-w-8);
+var y=(r.bottom+7+ht<=vh-8||r.top-7-ht<8)?r.bottom+7:r.top-7-ht;
+tip.style.left=x+'px';tip.style.top=y+'px';shown=icon;}
+document.querySelectorAll('.help').forEach(function(icon){
+icon.addEventListener('mouseenter',function(){place(icon)});icon.addEventListener('focus',function(){place(icon)});});
+window.addEventListener('scroll',function(){if(shown&&shown.matches(':hover,:focus'))place(shown)},true);
 "#;
 
 pub fn render(r: &Report) -> String {

@@ -293,8 +293,10 @@ fn read_cache(path: &Path) -> HashMap<u64, Vec<f32>> {
     for r in buf[8..].chunks_exact(rec) {
         let k = u64::from_le_bytes(r[..8].try_into().unwrap());
         let v = r[8..]
-            .chunks_exact(4)
-            .map(|b| f32::from_le_bytes(b.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| f32::from_le_bytes(*b))
             .collect();
         map.insert(k, v);
     }

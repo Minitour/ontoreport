@@ -57,6 +57,8 @@ struct Source {
 #[derive(Debug, Deserialize)]
 struct Category {
     #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
     groups: Vec<Group>,
 }
 
@@ -214,10 +216,11 @@ fn value_text(l: &Line) -> String {
 fn load_groups(g: Groups, index: &mut Index) {
     for s in g.sources {
         for c in s.categories {
-            for gr in c.groups {
+            for gr in &c.groups {
                 let group = GroupRef {
                     id: gr.id.clone(),
                     name: gr.name.clone(),
+                    category: c.name.clone(),
                     status: gr.status.clone(),
                     serves: gr.serves.clone().filter(|x| !x.trim().is_empty()),
                     why: gr.why.clone().filter(|x| !x.trim().is_empty()),

@@ -39,6 +39,8 @@ pub struct Term {
 pub struct GroupRef {
     pub id: String,
     pub name: String,
+    /// The category the group sits in on the desk.
+    pub category: Option<String>,
     /// Status as published on the desk ("in", "debatable", "out").
     pub status: Option<String>,
     /// Competency questions or use cases the group says it serves, as written.

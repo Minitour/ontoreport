@@ -153,6 +153,18 @@ runs one batch per CPU core: ENVO's 3,917 class labels take about 2 s on 32 thre
 about 16 s. `--config FILE` reads another configuration file; `--no-embeddings` skips the model;
 `--offline` downloads nothing.
 
+## Agent skill
+
+[`skills/ontoreport`](skills/ontoreport) is an agent skill (for Claude Code / Claude) that teaches the
+ontology-assessment workflow:
+1. lay out the project so every input is found (`releases.toml`, `decisions.json`, a concept list);
+2. run the report and read `report.json`;
+3. triage the findings into fixes, recorded decisions and questions for a domain expert
+   ([`references/findings.md`](skills/ontoreport/references/findings.md) explains every check);
+4. record decisions and re-run.
+
+The skill ships its test cases under `evals/`; they need an ontoreport newer than 0.0.1 on the PATH.
+
 ## Install
 
 ```bash

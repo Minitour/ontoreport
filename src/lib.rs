@@ -186,7 +186,7 @@ pub fn report_with(index: &Index, ctx: &Context) -> Report {
         sections::traceability,
         sections::review,
     ];
-    let sections: Vec<Section> = std::thread::scope(|scope| {
+    let mut sections: Vec<Section> = std::thread::scope(|scope| {
         let mut handles: Vec<_> = runs.iter().map(|f| scope.spawn(move || f(index))).collect();
         handles.insert(3, scope.spawn(move || reuse::reuse(index, rels)));
         handles.push(scope.spawn(move || corpus::coherence(index, emb)));
@@ -196,6 +196,7 @@ pub fn report_with(index: &Index, ctx: &Context) -> Report {
             .map(|h| h.join().expect("section thread"))
             .collect()
     });
+    apply_decisions(index, &mut sections);
     Report {
         tool: "ontoreport",
         version: VERSION,
@@ -204,6 +205,42 @@ pub fn report_with(index: &Index, ctx: &Context) -> Report {
         sections,
         input_checks: index.input_checks.clone(),
         recorded: index.recorded.clone(),
+    }
+}
+
+/// Mark findings the project has recorded a decision about (decisions.json, by check name and element).
+/// Pitfalls are matched by their code in the consistency section itself.
+fn apply_decisions(index: &Index, sections: &mut [Section]) {
+    if index.decisions.is_empty() {
+        return;
+    }
+    for s in sections.iter_mut() {
+        let mut decided = 0;
+        for f in &mut s.findings {
+            if f.check.starts_with("pitfall ") {
+                continue;
+            }
+            let Some(d) = index
+                .decisions
+                .iter()
+                .find(|d| d.covers(&f.check, &f.element))
+            else {
+                continue;
+            };
+            decided += 1;
+            let why = if d.reference.is_empty() {
+                d.reason.clone()
+            } else {
+                format!("{} ({})", d.reason, d.reference)
+            };
+            f.detail = format!("{}: {why}. Found: {}", d.decision, f.detail);
+            f.status = Some(d.decision.clone());
+        }
+        if decided > 0 {
+            s.notes.push(format!(
+                "{decided} finding(s) carry a decision recorded in decisions.json; their status shows the decision."
+            ));
+        }
     }
 }
 

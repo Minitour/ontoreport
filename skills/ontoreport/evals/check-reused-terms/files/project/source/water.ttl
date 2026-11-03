@@ -1,0 +1,12 @@
+@prefix x: <http://example.org/water#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix obo: <http://purl.obolibrary.org/obo/> .
+
+<http://example.org/water> a owl:Ontology ; owl:versionInfo "2026-01-01" .
+
+x:Lake a owl:Class ; rdfs:label "lake" ; obo:IAO_0000115 "A body of standing water." .
+x:River a owl:Class ; rdfs:label "obsolete river" ; owl:deprecated true ; obo:IAO_0100001 x:Stream .
+x:Stream a owl:Class ; rdfs:label "stream" ; obo:IAO_0000115 "A body of flowing water." .
+x:Pond a owl:Class ; rdfs:label "pond" ; rdfs:subClassOf x:River .
+x:Sea a owl:Class ; rdfs:label "sea" .

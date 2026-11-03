@@ -122,3 +122,43 @@ fn every_reuse_metric_and_chart_has_help() {
         assert!(ontoreport::help::about(&f.check).is_some(), "{}", f.check);
     }
 }
+
+#[test]
+fn recorded_decisions_apply_to_any_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = fixture();
+    std::fs::create_dir_all(dir.path().join("source")).unwrap();
+    for f in ["onto.ttl", "releases.toml", "source/water.ttl"] {
+        std::fs::copy(src.join(f), dir.path().join(f)).unwrap();
+    }
+    std::fs::write(
+        dir.path().join("decisions.json"),
+        r#"{"findings": [{"id": "label differs from the release",
+             "elements": ["brook (http://example.org/water#Stream)"],
+             "decision": "accepted", "reason": "local name kept", "ref": "notes 3"}]}"#,
+    )
+    .unwrap();
+    let index = ontoreport::load(dir.path()).unwrap();
+    let rels = releases::fetch_all(&releases::plans(&index), dir.path(), true, 100);
+    let r = ontoreport::report_with(
+        &index,
+        &ontoreport::Context {
+            releases: Some(&rels),
+            ..Default::default()
+        },
+    );
+    let s = section(&r, "reuse");
+    let f = s
+        .findings
+        .iter()
+        .find(|f| f.check == "label differs from the release")
+        .unwrap();
+    assert_eq!(f.status.as_deref(), Some("accepted"));
+    assert!(f.detail.starts_with("accepted: local name kept (notes 3)"));
+    // Other findings stay as they were.
+    assert!(s
+        .findings
+        .iter()
+        .filter(|f| f.check != "label differs from the release")
+        .all(|f| f.status.is_none()));
+}

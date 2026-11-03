@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: record-design-decisions
+expected_outcome: |
+  A decisions.json in project/ (or project/qc/) that records pitfall P11 (missing domain or range) as accepted with the reason that the project follows RO, and P08-C (missing rdfs:comment) as accepted because definitions use IAO:0000115; a regenerated report in which those findings show the decision while the other findings stay open; animals.ttl unchanged.
+context:
+  scaffold_script: place-files.sh

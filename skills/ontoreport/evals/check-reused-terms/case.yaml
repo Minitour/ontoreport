@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: check-reused-terms
+expected_outcome: |
+  A releases.toml in project/ that names the Water source with namespace http://example.org/water#, the release file source/water.ttl and version 2026-01-01; an ontoreport run on project/ whose reuse-fidelity section finds river obsolete (replaced by stream), ocean missing from the release, brook named 'stream' in the release, pond under an obsolete parent and sea with a definition the release does not give, while lake matches; and a list of the changes to make, with the ontology itself unchanged.
+context:
+  scaffold_script: place-files.sh

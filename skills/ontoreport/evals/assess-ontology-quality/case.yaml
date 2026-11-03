@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: assess-ontology-quality
+expected_outcome: |
+  An ontoreport HTML and JSON report of animals.ttl, and a summary that names 'hybrid' as unsatisfiable because it sits under the disjoint classes animal and plant, lists the classes and properties without a definition and the definition that cites Wikipedia, treats the OOPS! pitfalls as conventions to review rather than errors, and leaves animals.ttl unchanged.
+context:
+  scaffold_script: place-files.sh

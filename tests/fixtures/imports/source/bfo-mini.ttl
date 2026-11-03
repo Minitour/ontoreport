@@ -1,0 +1,8 @@
+@prefix obo: <http://purl.obolibrary.org/obo/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+obo:BFO_0000001 a owl:Class ; rdfs:label "entity" .
+obo:BFO_0000002 a owl:Class ; rdfs:label "continuant" ; rdfs:subClassOf obo:BFO_0000001 .
+obo:BFO_0000004 a owl:Class ; rdfs:label "independent continuant" ; rdfs:subClassOf obo:BFO_0000002 .
+obo:BFO_0000040 a owl:Class ; rdfs:label "material entity" ; rdfs:subClassOf obo:BFO_0000004 .

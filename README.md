@@ -97,7 +97,8 @@ a bare declaration), preferring the source the desk names: Darwin Core's own def
 Core terms it uses, RO for BFO's relations. Desk candidates marked Out are not checked unless
 `--include-out` is given. The structure section follows a reused class through the parents its release
 states, so a chain through terms the project did not choose (or through an obsolete class) is seen as
-the review desk sees it.
+the review desk sees it. A class of the ontology files whose parents sit in an import that is not in
+the project folder (an ontology that imports BFO) is followed on through that import's release.
 
 Releases are downloaded once into `~/.ontoreport/releases/` (at most `[releases] max_mb` each, 100 MB
 by default) and read in parallel; on the ODINI review desk (12,712 terms, 13 releases) the whole

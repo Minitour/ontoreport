@@ -1,0 +1,4 @@
+[[source]]
+name = "BFO"
+namespaces = ["http://purl.obolibrary.org/obo/BFO_"]
+files = ["source/bfo-mini.ttl"]

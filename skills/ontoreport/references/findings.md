@@ -22,7 +22,7 @@ missing imports were not seen, so a clean result covers only the files read).
 
 | Check | Meaning | Fix | False alarm |
 |---|---|---|---|
-| no path to the top class | following parents never reaches BFO's entity (when the project uses BFO) or owl:Thing | add the missing parent, or import the ontology that holds it; the detail names where the chain breaks, and the chart "Where parent chains break" shows the parents that would repair most classes at once | sometimes: parents defined in an imported ontology that is not in the folder |
+| no path to the top class | following parents never reaches BFO's entity (when the project uses BFO) or owl:Thing | add the missing parent, or import the ontology that holds it; the detail names where the chain breaks, and the chart "Where parent chains break" shows the parents that would repair most classes at once | sometimes: parents in an import whose release ontoreport cannot read (list it in releases.toml, or put the imported file in the folder) |
 
 ## Provenance (`provenance`)
 

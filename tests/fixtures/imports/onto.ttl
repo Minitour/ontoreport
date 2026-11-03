@@ -1,0 +1,12 @@
+@prefix : <http://example.org/imp#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix obo: <http://purl.obolibrary.org/obo/> .
+
+# Imports BFO, whose file is not in the project folder.
+<http://example.org/imp> a owl:Ontology ; owl:imports <http://purl.obolibrary.org/obo/bfo.owl> .
+
+:Buoy a owl:Class ; rdfs:label "buoy" ; rdfs:subClassOf obo:BFO_0000040 .
+:MooredBuoy a owl:Class ; rdfs:label "moored buoy" ; rdfs:subClassOf :Buoy .
+:Orphan a owl:Class ; rdfs:label "orphan" .
+:Stray a owl:Class ; rdfs:label "stray" ; rdfs:subClassOf obo:XYZ_0000001 .

@@ -214,18 +214,142 @@ impl<'a> ReleaseTree<'a> {
     }
 }
 
+/// Whether a class of the ontology files reaches BFO's entity: through the parents the files state, and,
+/// where a parent is not in the files (it sits in an import that is not in the project folder), through
+/// the parents its source release states.
+fn file_reaches<'a>(
+    iri: &'a str,
+    file: &HashMap<&'a str, &'a [String]>,
+    imported: &[String],
+    memo: &mut HashMap<&'a str, Reach>,
+    rt: &mut ReleaseTree<'a>,
+) -> bool {
+    if iri == BFO_ENTITY_IRI {
+        return true;
+    }
+    match memo.get(iri) {
+        Some(Reach::Yes) => return true,
+        Some(Reach::No) | Some(Reach::Visiting) => return false,
+        None => {}
+    }
+    memo.insert(iri, Reach::Visiting);
+    let ok = match file.get(iri) {
+        Some(ps) if !ps.is_empty() => ps.iter().any(|p| file_reaches(p, file, imported, memo, rt)),
+        // A term of an ontology the files import, whose file is not in the folder: its release decides.
+        // A term of any other ontology has only the parents the files give it.
+        _ => is_imported(iri, imported) && rt.knows(iri) && rt.reaches_top(iri),
+    };
+    memo.insert(iri, if ok { Reach::Yes } else { Reach::No });
+    ok
+}
+
+/// IRI prefixes of the ontologies the files import: `obo/bfo.owl` gives `obo/BFO_`, and any other import
+/// IRI is a prefix itself.
+fn imported_namespaces(index: &Index) -> Vec<String> {
+    const OBO: &str = "http://purl.obolibrary.org/obo/";
+    let mut out: Vec<String> = index
+        .ontologies
+        .iter()
+        .flat_map(|o| &o.imports)
+        .map(|i| match i.strip_prefix(OBO) {
+            Some(rest) => {
+                let id = rest.split(['/', '.']).next().unwrap_or("").to_uppercase();
+                format!("{OBO}{id}_")
+            }
+            None => i.trim_end_matches(['#', '/']).to_string(),
+        })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn is_imported(iri: &str, imported: &[String]) -> bool {
+    imported.iter().any(|ns| iri.starts_with(ns.as_str()))
+}
+
+/// Where the chains of a file class end, through the files and then the releases, at most `n`.
+fn file_dead_ends<'a>(
+    iri: &'a str,
+    file: &HashMap<&'a str, &'a [String]>,
+    imported: &[String],
+    labels: &HashMap<&'a str, &'a str>,
+    rt: &ReleaseTree<'a>,
+    n: usize,
+) -> Vec<String> {
+    let name = |x: &str| {
+        rt.term(x)
+            .and_then(ReleaseTerm::label)
+            .or_else(|| labels.get(x).copied())
+            .map(str::to_string)
+            .unwrap_or_else(|| crate::reuse::curie(x))
+    };
+    let mut out = BTreeSet::new();
+    let mut stack = vec![iri];
+    let mut seen = HashSet::new();
+    while let Some(x) = stack.pop() {
+        if !seen.insert(x) || x == BFO_ENTITY_IRI {
+            continue;
+        }
+        if let Some(ps) = file.get(x).filter(|ps| !ps.is_empty()) {
+            stack.extend(ps.iter().map(String::as_str));
+            continue;
+        }
+        if !is_imported(x, imported) {
+            if x != iri {
+                if file.contains_key(x) {
+                    out.insert(name(x));
+                } else {
+                    out.insert(format!("{} (in no file or import read)", name(x)));
+                }
+            }
+            continue;
+        }
+        match rt.term(x) {
+            Some(t) if t.deprecated && x != iri => {
+                out.insert(format!("{} (obsolete)", name(x)));
+            }
+            Some(t) if !t.parents.is_empty() => stack.extend(t.parents.iter().map(String::as_str)),
+            Some(_) | None if x == iri => {}
+            Some(_) => {
+                out.insert(name(x));
+            }
+            None => {
+                out.insert(format!("{} (in no file or release read)", name(x)));
+            }
+        }
+    }
+    out.into_iter().take(n).collect()
+}
+
+/// How a class is followed up to the top class.
+#[derive(Clone, Copy)]
+enum Route<'a> {
+    Release(&'a str),
+    Files(&'a str),
+    Label,
+}
+
 /// Whether the project is built on BFO: then every class must reach BFO's 'entity'. Otherwise the top
 /// is owl:Thing and any class with no asserted parent is a root under it.
 fn uses_bfo(index: &Index) -> bool {
     const BFO_ENTITY: &str = "http://purl.obolibrary.org/obo/bfo_0000001";
-    index.terms.iter().any(|t| {
-        t.iri.as_deref() == Some("http://purl.obolibrary.org/obo/BFO_0000001")
-            || t.parents.iter().any(|p| p == "entity" || p == BFO_ENTITY)
-    }) || index
-        .extra_parents
-        .values()
-        .flatten()
-        .any(|p| p == "entity")
+    const BFO: &str = "http://purl.obolibrary.org/obo/BFO_";
+    index
+        .ontologies
+        .iter()
+        .flat_map(|o| &o.imports)
+        .any(|i| i.to_lowercase().contains("/obo/bfo"))
+        || index.terms.iter().any(|t| {
+            t.iri.as_deref().is_some_and(|i| i.starts_with(BFO))
+                || t.parent_iris.iter().any(|p| p.starts_with(BFO))
+                || t.parents.iter().any(|p| p == "entity" || p == BFO_ENTITY)
+        })
+        || index
+            .extra_parents
+            .values()
+            .flatten()
+            .any(|p| p == "entity")
 }
 
 pub fn structure(index: &Index) -> Section {
@@ -233,7 +357,7 @@ pub fn structure(index: &Index) -> Section {
 }
 
 /// The structure section; with source releases, reused classes are followed through their releases.
-pub fn structure_with(index: &Index, releases: Option<&Releases>) -> Section {
+pub fn structure_with<'a>(index: &'a Index, releases: Option<&'a Releases>) -> Section {
     let mut s = Section::new("structure", "Structure");
     let mut tree = Tree::new(index);
     let mut rtree = releases
@@ -243,6 +367,22 @@ pub fn structure_with(index: &Index, releases: Option<&Releases>) -> Section {
             memo: HashMap::new(),
         });
     let mut by_release = 0usize;
+    let mut through_imports = 0usize;
+    // The ontology files' own parent links by IRI, for following a file class into the releases.
+    let file_parents: HashMap<&str, &[String]> = index
+        .terms
+        .iter()
+        .filter(|t| t.origin == Origin::Statements)
+        .filter_map(|t| t.iri.as_deref().map(|i| (i, t.parent_iris.as_slice())))
+        .collect();
+    let file_labels: HashMap<&str, &str> = index
+        .terms
+        .iter()
+        .filter(|t| t.origin == Origin::Statements)
+        .filter_map(|t| t.iri.as_deref().map(|i| (i, t.label.as_str())))
+        .collect();
+    let mut file_memo: HashMap<&str, Reach> = HashMap::new();
+    let imported = imported_namespaces(index);
     s.metric(
         "top class",
         if tree.roots_reach_top {
@@ -267,20 +407,40 @@ pub fn structure_with(index: &Index, releases: Option<&Releases>) -> Section {
             // A desk candidate its release contains is followed through the releases; anything else
             // (the project's own classes, and candidates from sources no release was read for) through
             // the parents the project records.
-            let in_release = match (&mut rtree, t.iri.as_deref()) {
+            // A desk candidate its release contains is followed through the releases. A class of the
+            // ontology files whose parents lead into an import that is not in the folder is followed on
+            // through the source releases. Anything else goes by the parents the project records.
+            let route = match (rtree.as_ref(), t.iri.as_deref()) {
                 (Some(rt), Some(iri)) if origin == Origin::Candidates && rt.knows(iri) => {
-                    Some((rt, iri))
+                    Route::Release(iri)
                 }
-                _ => None,
+                (Some(_), Some(iri))
+                    if origin == Origin::Statements && !tree.reaches_top(t.key.as_str()) =>
+                {
+                    Route::Files(iri)
+                }
+                _ => Route::Label,
             };
-            let (ok, ends, where_) = match in_release {
-                Some((rt, iri)) => {
+            let (ok, ends, where_) = match (route, rtree.as_mut()) {
+                (Route::Files(iri), Some(rt)) => {
+                    let ok = file_reaches(iri, &file_parents, &imported, &mut file_memo, rt);
+                    if ok {
+                        through_imports += 1;
+                    }
+                    let ends = if ok {
+                        Vec::new()
+                    } else {
+                        file_dead_ends(iri, &file_parents, &imported, &file_labels, rt, 3)
+                    };
+                    (ok, ends, "through the files and the source releases, ")
+                }
+                (Route::Release(iri), Some(rt)) => {
                     by_release += 1;
                     let ok = rt.reaches_top(iri);
                     let ends = if ok { Vec::new() } else { rt.dead_ends(iri, 3) };
                     (ok, ends, "in the source releases, ")
                 }
-                None => {
+                _ => {
                     let key = t.key.as_str();
                     let ok = tree.reaches_top(key);
                     let ends = if ok {
@@ -331,6 +491,13 @@ pub fn structure_with(index: &Index, releases: Option<&Releases>) -> Section {
         .push(bars("Classes without a path, by source", missing_by, 0));
     s.charts
         .push(bars("Where parent chains break (top 12)", breaks, 12));
+    if through_imports > 0 {
+        s.notes.push(format!(
+            "{} classes of the ontology files reach the top class only through parents in an import that \
+             is not in the project folder; they were followed through the source releases.",
+            crate::thousands(through_imports as u64)
+        ));
+    }
     if by_release > 0 {
         s.notes.push(format!(
             "{} desk candidates were followed through their source releases: parents as each release states \

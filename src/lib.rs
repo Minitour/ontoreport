@@ -179,15 +179,18 @@ pub fn report_with(index: &Index, ctx: &Context) -> Report {
     let emb = &ctx.embeddings;
     let rels = ctx.releases;
     type Run = fn(&Index) -> Section;
-    let runs: [Run; 5] = [
+    let runs: [Run; 4] = [
         sections::logic,
-        sections::structure,
         sections::provenance,
         sections::traceability,
         sections::review,
     ];
     let mut sections: Vec<Section> = std::thread::scope(|scope| {
         let mut handles: Vec<_> = runs.iter().map(|f| scope.spawn(move || f(index))).collect();
+        handles.insert(
+            1,
+            scope.spawn(move || sections::structure_with(index, rels)),
+        );
         handles.insert(3, scope.spawn(move || reuse::reuse(index, rels)));
         handles.push(scope.spawn(move || corpus::coherence(index, emb)));
         handles.push(scope.spawn(move || corpus::corpus_fit(index, emb)));

@@ -109,9 +109,10 @@ pub fn about(name: &str) -> Option<&'static str> {
             "Reused identifiers that none of the releases read contains: a typing error in the identifier, a \
              term from a different source than recorded, or a term the source has removed."
         }
-        "parent obsolete in the source release" => {
-            "Reused terms whose parent in the source release is obsolete, so the term hangs from a retired \
-             class there. Usually the source has not yet moved it; worth knowing before relying on its place."
+        "under an obsolete class in the source release" => {
+            "Reused terms that sit, in their source release, under an obsolete class: their parent or a class \
+             further up has been retired. Usually the source has not yet moved them; worth knowing before \
+             relying on their place in the hierarchy."
         }
         "label differs from the release" => {
             "Reused terms whose name in the project differs from the name in the source release. A qualifier \

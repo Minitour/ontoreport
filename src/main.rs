@@ -37,6 +37,10 @@ struct Cli {
     /// Download nothing: use only the model and source releases already in ~/.ontoreport.
     #[arg(long)]
     offline: bool,
+
+    /// Also check desk candidates marked Out (by default only In and Debatable ones are checked).
+    #[arg(long)]
+    include_out: bool,
 }
 
 fn main() -> ExitCode {
@@ -61,6 +65,7 @@ fn main() -> ExitCode {
             }
         }
     }
+    index.include_out = cli.include_out;
     let t_load = t0.elapsed();
 
     // The configuration file is created on first run, even when this run does not embed anything.

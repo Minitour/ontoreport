@@ -2,7 +2,7 @@
 
 ```
 ontoreport <project-folder | ontology-file> [--out report.html] [--json-only]
-           [--concepts FILE] [--config FILE] [--no-embeddings] [--offline]
+           [--concepts FILE] [--config FILE] [--no-embeddings] [--offline] [--include-out]
 ```
 
 | Flag | Effect |
@@ -13,6 +13,7 @@ ontoreport <project-folder | ontology-file> [--out report.html] [--json-only]
 | `--config FILE` | read this configuration instead of `~/.ontoreport/config.toml` |
 | `--no-embeddings` | skip the embedding model: no coherence, corpus fit without CSS/PSS/PDA |
 | `--offline` | download nothing; use the cached model and releases only |
+| `--include-out` | also check desk candidates marked Out (by default only In and Debatable are checked) |
 
 Environment: `ONTOREPORT_HOME` moves `~/.ontoreport`; `ONTOREPORT_TIMING=1` prints the time of each
 check to stderr; `HF_TOKEN` is sent to Hugging Face for gated models.

@@ -72,7 +72,7 @@ fn each_kind_of_reuse_problem_is_found() {
         vec![w("Ocean", "ocean")]
     );
     assert_eq!(
-        found(s, "parent obsolete in the source release"),
+        found(s, "under an obsolete class in the source release"),
         vec![w("Pond", "pond")]
     );
     assert_eq!(

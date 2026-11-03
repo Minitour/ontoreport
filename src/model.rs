@@ -112,6 +112,8 @@ pub struct Index {
     pub domain: Option<crate::corpus::DomainConcepts>,
     /// Source releases the project lists in releases.toml.
     pub release_specs: Vec<crate::releases::SourceSpec>,
+    /// Check desk candidates marked Out as well (by default they are left out).
+    pub include_out: bool,
 }
 
 impl Index {

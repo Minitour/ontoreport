@@ -309,7 +309,7 @@ impl<'a> Hierarchy<'a> {
         let nodes: Vec<&Term> = index
             .terms
             .iter()
-            .filter(|t| t.origin == origin && t.kind == "class" && in_scope(t))
+            .filter(|t| t.origin == origin && t.kind == "class" && in_scope(index, t))
             .collect();
         let mut by_iri: HashMap<&str, usize> = HashMap::new();
         let mut by_key: HashMap<&str, Vec<usize>> = HashMap::new();

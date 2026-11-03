@@ -19,7 +19,7 @@ const BUILT_IN: [&str; 4] = [
 const PROBLEMS: [&str; 6] = [
     "obsolete in the source release",
     "not in the source release",
-    "parent obsolete in the source release",
+    "under an obsolete class in the source release",
     "label differs from the release",
     "definition differs from the release",
     "definition not in the release",
@@ -33,6 +33,21 @@ fn bare_label(label: &str) -> &str {
         Some(i) if l.ends_with(')') && i > 0 => &l[..i],
         _ => l,
     }
+}
+
+/// Whether the project gives the term no name of its own: its label is its identifier ("dcterms:title",
+/// "IAO:0000118", the IRI or its local name), as a desk shows a term the file does not label.
+fn unnamed(t: &Term) -> bool {
+    let Some(iri) = t.iri.as_deref() else {
+        return false;
+    };
+    let l = t.label.trim();
+    let local = iri.rsplit(['#', '/']).next().unwrap_or(iri);
+    l == iri
+        || l.eq_ignore_ascii_case(&curie(iri))
+        || l == local
+        || l.rsplit_once(':')
+            .is_some_and(|(p, name)| !p.contains(' ') && name == local)
 }
 
 /// Lower-cased, with runs of white space as one space and no final full stop.
@@ -54,7 +69,7 @@ fn short(s: &str, n: usize) -> String {
     }
 }
 
-fn curie(iri: &str) -> String {
+pub(crate) fn curie(iri: &str) -> String {
     if let Some(rest) = iri.strip_prefix("http://purl.obolibrary.org/obo/") {
         if let Some((p, id)) = rest.split_once('_') {
             return format!("{p}:{id}");
@@ -68,6 +83,28 @@ fn named(rel: &Release, iri: &str) -> String {
         Some(l) => format!("'{l}' ({})", curie(iri)),
         None => curie(iri),
     }
+}
+
+/// The nearest obsolete classes above a term in its release: following parents up, stopping at each
+/// obsolete class found. A term can hang from a retired class several levels up (ENVO classes under
+/// OBI's obsolete planned process), which a check of the direct parent alone misses.
+fn obsolete_above<'a>(rel: &'a Release, rt: &'a ReleaseTerm) -> Vec<&'a str> {
+    let mut found = BTreeSet::new();
+    let mut seen = BTreeSet::new();
+    let mut stack: Vec<&str> = rt.parents.iter().map(String::as_str).collect();
+    while let Some(p) = stack.pop() {
+        if !seen.insert(p) {
+            continue;
+        }
+        match rel.terms.get(p) {
+            Some(pt) if pt.deprecated => {
+                found.insert(p);
+            }
+            Some(pt) => stack.extend(pt.parents.iter().map(String::as_str)),
+            None => {}
+        }
+    }
+    found.into_iter().collect()
 }
 
 /// The problems one term has against its release, as (problem index, detail).
@@ -98,23 +135,22 @@ fn check(t: &Term, rel: &Release, rt: Option<&ReleaseTerm>) -> Vec<(usize, Strin
             },
         ));
     }
-    let obsolete_parents: Vec<String> = rt
-        .parents
-        .iter()
-        .filter(|p| rel.terms.get(*p).is_some_and(|pt| pt.deprecated))
-        .map(|p| named(rel, p))
-        .collect();
-    if !obsolete_parents.is_empty() {
+    let above = obsolete_above(rel, rt);
+    if !above.is_empty() {
         out.push((
             2,
             format!(
-                "in {}, its parent {} is obsolete",
+                "in {}, it sits under the obsolete {}",
                 rel.name,
-                obsolete_parents.join(", ")
+                above
+                    .iter()
+                    .map(|p| named(rel, p))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
         ));
     }
-    if !rt.deprecated && !rt.labels.is_empty() {
+    if !rt.deprecated && !rt.labels.is_empty() && !unnamed(t) {
         let mine = norm(&t.label);
         let bare = norm(bare_label(&t.label));
         if !rt.labels.iter().any(|l| norm(l) == mine || norm(l) == bare) {
@@ -209,7 +245,7 @@ pub fn reuse(index: &Index, releases: Option<&Releases>) -> Section {
         for t in index
             .terms
             .iter()
-            .filter(|t| t.origin == origin && in_scope(t))
+            .filter(|t| t.origin == origin && in_scope(index, t))
         {
             let Some(iri) = t.iri.as_deref() else {
                 continue;
@@ -324,6 +360,31 @@ pub fn reuse(index: &Index, releases: Option<&Releases>) -> Section {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_identifier_shown_as_a_name_is_no_name() {
+        let mut t = crate::model::Term {
+            label: "dcterms:title".into(),
+            key: String::new(),
+            curie: None,
+            iri: Some("http://purl.org/dc/terms/title".into()),
+            kind: String::new(),
+            definitions: vec![],
+            definition_sources: vec![],
+            parents: vec![],
+            parent_iris: vec![],
+            labels: vec![],
+            origin: Origin::Statements,
+            source: None,
+            release: None,
+            group: None,
+        };
+        assert!(unnamed(&t));
+        t.label = "title".into();
+        assert!(unnamed(&t));
+        t.label = "Title of the resource".into();
+        assert!(!unnamed(&t));
+    }
 
     #[test]
     fn desk_qualifiers_are_not_part_of_the_label() {

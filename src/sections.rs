@@ -4,9 +4,10 @@
 //! desk are checked unless their published status is "out", since those will not enter the ontology.
 //! Each section returns metrics, chart data and findings.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::model::{Index, Origin, Term};
+use crate::releases::{ReleaseTerm, Releases};
 use crate::report::{bars, Chart, Direction, Finding, Node, Row, Section};
 
 /// Keys of the top class: labels, or the IRI (lower-cased) when the file defining it is not loaded.
@@ -21,10 +22,14 @@ const WEAK_SOURCES: &[&str] = &["wikipedia.org", "wikipedia"];
 /// Review statuses in display order; anything else is grouped under "other".
 pub const STATUSES: &[&str] = &["in", "debatable", "out", "other"];
 
-pub(crate) fn in_scope(t: &Term) -> bool {
+/// Whether a term is checked: everything except desk candidates marked Out, unless the index asks for
+/// those too (`--include-out`).
+pub(crate) fn in_scope(index: &Index, t: &Term) -> bool {
     match t.origin {
         Origin::Statements => true,
-        Origin::Candidates => t.group.as_ref().and_then(|g| g.status.as_deref()) != Some("out"),
+        Origin::Candidates => {
+            index.include_out || t.group.as_ref().and_then(|g| g.status.as_deref()) != Some("out")
+        }
     }
 }
 
@@ -138,6 +143,77 @@ impl<'a> Tree<'a> {
     }
 }
 
+/// The tree as the source releases draw it: a reused class's parents as its release states them, so a
+/// chain is followed through terms the project did not choose. An obsolete class, or a parent no release
+/// read contains, ends the chain. This is the check the review desk ran against the full releases.
+struct ReleaseTree<'a> {
+    rels: &'a Releases,
+    memo: HashMap<&'a str, Reach>,
+}
+
+const BFO_ENTITY_IRI: &str = "http://purl.obolibrary.org/obo/BFO_0000001";
+
+impl<'a> ReleaseTree<'a> {
+    fn term(&self, iri: &str) -> Option<&'a ReleaseTerm> {
+        self.rels.find(iri, None).and_then(|(_, t)| t)
+    }
+
+    fn knows(&self, iri: &str) -> bool {
+        self.term(iri).is_some()
+    }
+
+    fn reaches_top(&mut self, iri: &'a str) -> bool {
+        if iri == BFO_ENTITY_IRI {
+            return true;
+        }
+        match self.memo.get(iri) {
+            Some(Reach::Yes) => return true,
+            Some(Reach::No) | Some(Reach::Visiting) => return false,
+            None => {}
+        }
+        self.memo.insert(iri, Reach::Visiting);
+        let ok = match self.term(iri) {
+            Some(t) if !t.deprecated => t.parents.iter().any(|p| self.reaches_top(p)),
+            _ => false,
+        };
+        self.memo
+            .insert(iri, if ok { Reach::Yes } else { Reach::No });
+        ok
+    }
+
+    /// Where the chains end on the way up: classes with no parent, obsolete classes, and parents that no
+    /// release contains, at most `n`, by name.
+    fn dead_ends(&self, iri: &'a str, n: usize) -> Vec<String> {
+        let name = |x: &str| match self.term(x).and_then(ReleaseTerm::label) {
+            Some(l) => l.to_string(),
+            None => crate::reuse::curie(x),
+        };
+        let mut out = BTreeSet::new();
+        let mut stack = vec![iri];
+        let mut seen = HashSet::new();
+        while let Some(x) = stack.pop() {
+            if !seen.insert(x) || x == BFO_ENTITY_IRI {
+                continue;
+            }
+            match self.term(x) {
+                None => {
+                    out.insert(format!("{} (in no release read)", name(x)));
+                }
+                Some(t) if t.deprecated && x != iri => {
+                    out.insert(format!("{} (obsolete)", name(x)));
+                }
+                Some(t) if t.parents.is_empty() => {
+                    if x != iri {
+                        out.insert(name(x));
+                    }
+                }
+                Some(t) => stack.extend(t.parents.iter().map(String::as_str)),
+            }
+        }
+        out.into_iter().take(n).collect()
+    }
+}
+
 /// Whether the project is built on BFO: then every class must reach BFO's 'entity'. Otherwise the top
 /// is owl:Thing and any class with no asserted parent is a root under it.
 fn uses_bfo(index: &Index) -> bool {
@@ -153,8 +229,20 @@ fn uses_bfo(index: &Index) -> bool {
 }
 
 pub fn structure(index: &Index) -> Section {
+    structure_with(index, None)
+}
+
+/// The structure section; with source releases, reused classes are followed through their releases.
+pub fn structure_with(index: &Index, releases: Option<&Releases>) -> Section {
     let mut s = Section::new("structure", "Structure");
     let mut tree = Tree::new(index);
+    let mut rtree = releases
+        .filter(|_| !tree.roots_reach_top)
+        .map(|rels| ReleaseTree {
+            rels,
+            memo: HashMap::new(),
+        });
+    let mut by_release = 0usize;
     s.metric(
         "top class",
         if tree.roots_reach_top {
@@ -172,17 +260,45 @@ pub fn structure(index: &Index) -> Section {
         let classes: Vec<&Term> = index
             .terms
             .iter()
-            .filter(|t| t.origin == origin && t.kind == "class" && in_scope(t))
+            .filter(|t| t.origin == origin && t.kind == "class" && in_scope(index, t))
             .collect();
         let mut missing = 0;
         for t in &classes {
-            let key = t.key.as_str();
-            if !tree.reaches_top(key) {
+            // A desk candidate its release contains is followed through the releases; anything else
+            // (the project's own classes, and candidates from sources no release was read for) through
+            // the parents the project records.
+            let in_release = match (&mut rtree, t.iri.as_deref()) {
+                (Some(rt), Some(iri)) if origin == Origin::Candidates && rt.knows(iri) => {
+                    Some((rt, iri))
+                }
+                _ => None,
+            };
+            let (ok, ends, where_) = match in_release {
+                Some((rt, iri)) => {
+                    by_release += 1;
+                    let ok = rt.reaches_top(iri);
+                    let ends = if ok { Vec::new() } else { rt.dead_ends(iri, 3) };
+                    (ok, ends, "in the source releases, ")
+                }
+                None => {
+                    let key = t.key.as_str();
+                    let ok = tree.reaches_top(key);
+                    let ends = if ok {
+                        Vec::new()
+                    } else {
+                        tree.dead_ends(key, 3)
+                            .into_iter()
+                            .map(str::to_string)
+                            .collect()
+                    };
+                    (ok, ends, "")
+                }
+            };
+            if !ok {
                 missing += 1;
                 *missing_by.entry(place(t)).or_default() += 1;
-                let ends = tree.dead_ends(key, 3);
                 for e in &ends {
-                    *breaks.entry((*e).to_string()).or_default() += 1;
+                    *breaks.entry(e.clone()).or_default() += 1;
                 }
                 s.findings.push(Finding {
                     check: "no path to the top class".into(),
@@ -191,9 +307,9 @@ pub fn structure(index: &Index) -> Section {
                     source: t.source.clone(),
                     status: status(t),
                     detail: if ends.is_empty() {
-                        "no parent recorded".into()
+                        format!("{where_}no parent recorded")
                     } else {
-                        format!("chain breaks at: {}", ends.join(", "))
+                        format!("{where_}the chain breaks at: {}", ends.join(", "))
                     },
                 });
             }
@@ -215,22 +331,26 @@ pub fn structure(index: &Index) -> Section {
         .push(bars("Classes without a path, by source", missing_by, 0));
     s.charts
         .push(bars("Where parent chains break (top 12)", breaks, 12));
+    if by_release > 0 {
+        s.notes.push(format!(
+            "{} desk candidates were followed through their source releases: parents as each release states \
+             them, with an obsolete class or a parent in no release read ending the chain.",
+            crate::thousands(by_release as u64)
+        ));
+    }
     s.notes.push(
-        "Parents are resolved by label through every term the project knows (ontology files, desk candidates \
-         and the desk's parent-chain table), since a file's parents may sit in an ontology it imports. \
-         Candidates marked out are not checked."
+        "Other classes are followed by label through every term the project knows (ontology files, desk \
+         candidates and the desk's parent-chain table), since a file's parents may sit in an ontology it \
+         imports. Candidates marked out are not checked."
             .into(),
     );
     if !index.recorded.is_empty() {
         s.metric("tree errors recorded by the desk", index.recorded.len());
         s.notes.push(
-            "The desk's recorded tree errors were computed against the full source releases; this check uses \
-             only the parents published with the desk, so the two lists are compared rather than expected to match."
+            "The desk records its own tree errors, including candidates marked out; they are kept for comparison."
                 .into(),
         );
     }
-    s.notes
-        .push("Consistency and pitfalls need an ontology file and run in a later version.".into());
     s.finish()
 }
 
@@ -247,7 +367,7 @@ pub fn provenance(index: &Index) -> Section {
         let terms: Vec<&Term> = index
             .terms
             .iter()
-            .filter(|t| t.origin == origin && in_scope(t) && t.kind != "individual")
+            .filter(|t| t.origin == origin && in_scope(index, t) && t.kind != "individual")
             .collect();
         let (mut no_def, mut with_src, mut weak) = (0u64, 0u64, 0u64);
         for t in &terms {
@@ -352,7 +472,7 @@ pub fn traceability(index: &Index) -> Section {
     for t in index
         .terms
         .iter()
-        .filter(|t| t.origin == Origin::Candidates && in_scope(t))
+        .filter(|t| t.origin == Origin::Candidates && in_scope(index, t))
     {
         if let Some(g) = &t.group {
             groups.entry(g.id.as_str()).or_insert((t, 0)).1 += 1;

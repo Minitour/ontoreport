@@ -54,7 +54,7 @@ fn structure_finds_broken_chains_across_files_and_candidates() {
         .iter()
         .find(|f| f.element == "orphan class")
         .unwrap();
-    assert_eq!(orphan.detail, "chain breaks at: missing parent");
+    assert_eq!(orphan.detail, "the chain breaks at: missing parent");
 }
 
 #[test]

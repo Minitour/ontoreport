@@ -40,7 +40,7 @@ ontoreport could read; "Desk terms with no release to check against" shows what 
 |---|---|---|---|
 | obsolete in the source release | the source has retired the term; the detail names the replacement when the source gives one | switch to the replacement | rare |
 | not in the source release | no release read contains the identifier | check the identifier for a typing error, and that the term comes from the source recorded; add the right source to releases.toml | sometimes (a source whose release file leaves the term out, or a term from a source not configured) |
-| parent obsolete in the source release | in the source, the term's parent is retired | nothing to fix in the project; note it, and check whether a newer source release moved the term | rare as a fact, often harmless |
+| under an obsolete class in the source release | in the source, the term's parent or a class above it is retired | nothing to fix in the project; note it, and check whether a newer source release moved the term | rare as a fact, often harmless |
 | label differs from the release | the project names the term differently from its source | use the source's label, or record the deliberate change | sometimes (a qualifier in brackets is already ignored) |
 | definition differs from the release | the project's definition matches none of the source's | restore the source text, or record why it was changed and cite the source of the new text | sometimes (an older or newer release's wording) |
 | definition not in the release | the source gives no definition, yet the project has one | the text was written for the project: give it a definition source | rare |

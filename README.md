@@ -60,7 +60,7 @@ raising the finding again:
 | Consistency and pitfalls | OWL 2 EL consistency and unsatisfiable classes (whelk); the 31 OOPS!-style pitfalls of OWL-MCP, each with its recorded decision; imports not loaded |
 | Structure | Classes without a path to the top class: BFO's *entity* when the project uses BFO, otherwise `owl:Thing` |
 | Provenance | Terms without a definition; definitions citing a weak source; definitions with their own source annotation |
-| Reuse fidelity | Each reused term against the release it came from: missing, obsolete (with its replacement), under an obsolete parent, a different label or definition, a definition the release does not give; identifiers used under two names |
+| Reuse fidelity | Each reused term against the release it came from: missing, obsolete (with its replacement), under an obsolete class, a different label or definition, a definition the release does not give; identifiers used under two names |
 | Traceability | What each kept group on a review desk says it serves (competency questions, use cases) |
 | Review status | Candidate terms by source and status, with a drill-down by source, category and group |
 | Semantic coherence | CSS, PSS and PDA of every concept family (a class with two or more subclasses), from sentence embeddings; children whose family scores better without them |
@@ -94,7 +94,10 @@ csv = { iri = "term_iri", label = "label", definition = "definition", status = "
 
 When a term is in several releases, the one that defines it is used (a definition beats a label beats
 a bare declaration), preferring the source the desk names: Darwin Core's own definitions of the Dublin
-Core terms it uses, RO for BFO's relations. Desk candidates marked Out are not checked.
+Core terms it uses, RO for BFO's relations. Desk candidates marked Out are not checked unless
+`--include-out` is given. The structure section follows a reused class through the parents its release
+states, so a chain through terms the project did not choose (or through an obsolete class) is seen as
+the review desk sees it.
 
 Releases are downloaded once into `~/.ontoreport/releases/` (at most `[releases] max_mb` each, 100 MB
 by default) and read in parallel; on the ODINI review desk (12,712 terms, 13 releases) the whole
@@ -151,7 +154,7 @@ report needs it (about 91 MB for the default), and vectors are cached in `~/.ont
 a second report on the same ontology embeds nothing and is byte-identical to the first. Embedding
 runs one batch per CPU core: ENVO's 3,917 class labels take about 2 s on 32 threads, OMIT's 26,255
 about 16 s. `--config FILE` reads another configuration file; `--no-embeddings` skips the model;
-`--offline` downloads nothing.
+`--offline` downloads nothing; `--include-out` also checks desk candidates marked Out.
 
 ## Agent skill
 

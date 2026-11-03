@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufWriter, Read, Write};
 use std::path::Path;
-use std::process::Command;
 use std::time::Instant;
 
 use candle_core::{DType, Device, IndexOp, Tensor};
@@ -53,35 +52,14 @@ pub fn fetch(m: &ModelConfig) -> Result<(), String> {
     if missing.is_empty() {
         return Ok(());
     }
-    fs::create_dir_all(&m.dir).map_err(|e| format!("{}: {e}", m.dir.display()))?;
     for f in missing {
         let url = format!(
             "https://huggingface.co/{}/resolve/{}/{f}",
             m.repo, m.revision
         );
-        let dest = m.dir.join(f);
-        let part = m.dir.join(format!("{f}.part"));
-        eprintln!("ontoreport: downloading {url}");
-        let mut cmd = Command::new("curl");
-        cmd.args(["-fL", "--retry", "3", "--silent", "--show-error", "-o"])
-            .arg(&part)
-            .arg(&url);
-        if let Ok(token) = std::env::var("HF_TOKEN") {
-            cmd.arg("-H").arg(format!("Authorization: Bearer {token}"));
-        }
-        let status = cmd.status().map_err(|e| {
-            format!(
-                "could not run curl to download the model ({e}); download {url} into {} by hand",
-                m.dir.display()
-            )
+        crate::net::fetch(&url, &m.dir.join(f), None).map_err(|e| {
+            format!("{e}; check model.repo and model.revision in the configuration")
         })?;
-        if !status.success() {
-            let _ = fs::remove_file(&part);
-            return Err(format!(
-                "downloading {url} failed ({status}); check model.repo and model.revision in the configuration"
-            ));
-        }
-        fs::rename(&part, &dest).map_err(|e| format!("{}: {e}", dest.display()))?;
     }
     Ok(())
 }

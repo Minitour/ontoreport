@@ -30,6 +30,7 @@ fn writes_html_and_json_reports() {
         .arg("--out")
         .arg(&out)
         .arg("--no-embeddings")
+        .arg("--offline")
         .output()
         .expect("run ontoreport");
     assert!(
@@ -41,7 +42,7 @@ fn writes_html_and_json_reports() {
     let json: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.path().join("report.json")).unwrap()).unwrap();
     assert_eq!(json["tool"], "ontoreport");
-    assert_eq!(json["sections"].as_array().unwrap().len(), 7);
+    assert_eq!(json["sections"].as_array().unwrap().len(), 8);
 }
 
 #[test]
@@ -54,6 +55,7 @@ fn first_run_writes_the_configuration_file() {
         .arg("--out")
         .arg(dir.path().join("r.html"))
         .arg("--no-embeddings")
+        .arg("--offline")
         .output()
         .expect("run ontoreport");
     assert!(

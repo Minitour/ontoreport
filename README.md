@@ -9,8 +9,8 @@ to its source release, and how much of the ontology has been reviewed. One nativ
 platform, written in Rust, distributed on npm and PyPI.
 
 > **Status: early development.** The published 0.0.1 is a placeholder; build from source for the
-> current version. Reuse fidelity, requirements coverage from a requirements file and review
-> decisions come next.
+> current version. Requirements coverage from a requirements file and review decisions from a desk
+> export come next.
 
 ## Usage
 
@@ -35,6 +35,7 @@ All inputs are optional; a section whose input is missing is marked "not run".
 | Review-desk data: `g0.json` (statements of an ontology file), `groups.json` (candidate terms), `check.json` (the desk's self-check) | the folder or `data/` |
 | Recorded decisions: `decisions.json` | the folder or `qc/` |
 | Domain concepts: `concepts.json` or `concepts.txt` (or `--concepts FILE`) | the folder or `corpus/` |
+| Source releases that are not OBO ontologies: `releases.toml` | the folder |
 
 A file that cannot be read is reported as a finding and the rest of the report goes ahead. Labels,
 definitions and definition sources are read from the RDF directly, so they count even when a file
@@ -59,13 +60,45 @@ raising the finding again:
 | Consistency and pitfalls | OWL 2 EL consistency and unsatisfiable classes (whelk); the 31 OOPS!-style pitfalls of OWL-MCP, each with its recorded decision; imports not loaded |
 | Structure | Classes without a path to the top class: BFO's *entity* when the project uses BFO, otherwise `owl:Thing` |
 | Provenance | Terms without a definition; definitions citing a weak source; definitions with their own source annotation |
+| Reuse fidelity | Each reused term against the release it came from: missing, obsolete (with its replacement), under an obsolete parent, a different label or definition, a definition the release does not give; identifiers used under two names |
 | Traceability | What each kept group on a review desk says it serves (competency questions, use cases) |
 | Review status | Candidate terms by source and status, with a drill-down by source, category and group |
 | Semantic coherence | CSS, PSS and PDA of every concept family (a class with two or more subclasses), from sentence embeddings; children whose family scores better without them |
 | Corpus fit | Domain coverage, ontology relevance and sub-ontology relevance against a domain-concept list; the most frequent domain concepts the ontology lacks; CSS, PSS and PDA of the domain-relevant subset |
 
-Planned: reuse fidelity against source releases, requirements coverage, and review decisions from a
-desk export.
+Planned: requirements coverage, and review decisions from a desk export.
+
+### Reuse fidelity and `releases.toml`
+
+A reused term is checked against the release of the source it was taken from. For OBO ontologies
+ontoreport finds the release itself, but only for ontologies whose release the project records (a
+review desk's release text such as "BFO 2019-08-26; RO 2026-09-04", or a date on a source named after
+the ontology): it fetches the full release file of that date, or the current release when the dated
+file is not published, and reports when the current release is a different version. Identifiers of
+other OBO ontologies (terms a source imports, such as ENVO's NCBITaxon classes) are checked against
+the release of the source they were taken with. Other sources are listed in `releases.toml`:
+
+```toml
+[[source]]
+name = "I-ADOPT"                               # the source's name on the desk
+namespaces = ["https://w3id.org/iadopt/ont/"]  # IRIs it defines
+files = ["https://w3id.org/iadopt/ont/1.1.0"]  # URLs or paths relative to this file
+version = "1.1.0"                              # the version the project used
+
+[[source]]
+name = "Darwin Core"                           # a vocabulary published as a CSV table
+namespaces = ["http://rs.tdwg.org/dwc/terms/"]
+files = ["https://raw.githubusercontent.com/tdwg/dwc/<commit>/vocabulary/term_versions.csv"]
+csv = { iri = "term_iri", label = "label", definition = "definition", status = "status", current = ["recommended"] }
+```
+
+When a term is in several releases, the one that defines it is used (a definition beats a label beats
+a bare declaration), preferring the source the desk names: Darwin Core's own definitions of the Dublin
+Core terms it uses, RO for BFO's relations. Desk candidates marked Out are not checked.
+
+Releases are downloaded once into `~/.ontoreport/releases/` (at most `[releases] max_mb` each, 100 MB
+by default) and read in parallel; on the ODINI review desk (12,712 terms, 13 releases) the whole
+report takes about a second once they are cached. `--offline` uses only what is cached.
 
 ### Coherence and corpus fit
 
@@ -108,13 +141,17 @@ batch_size = 8
 
 [text]
 form = "label+definition"  # or "label", as in 2023
+
+[releases]
+max_mb = 100             # largest source release to download
 ```
 
 The model is downloaded with `curl` into `~/.ontoreport/models/<repo>/<revision>/` the first time a
 report needs it (about 91 MB for the default), and vectors are cached in `~/.ontoreport/cache/`, so
 a second report on the same ontology embeds nothing and is byte-identical to the first. Embedding
 runs one batch per CPU core: ENVO's 3,917 class labels take about 2 s on 32 threads, OMIT's 26,255
-about 16 s. `--config FILE` reads another configuration file; `--no-embeddings` skips the model.
+about 16 s. `--config FILE` reads another configuration file; `--no-embeddings` skips the model;
+`--offline` downloads nothing.
 
 ## Install
 

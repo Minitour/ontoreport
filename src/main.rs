@@ -4,7 +4,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use clap::Parser;
-use ontoreport::{config, corpus, embed};
+use ontoreport::{config, corpus, embed, releases};
 
 /// Quality report for OWL ontologies built from the project record.
 #[derive(Parser, Debug)]
@@ -33,6 +33,10 @@ struct Cli {
     /// Skip the embedding model: no coherence scores, and corpus fit without them.
     #[arg(long)]
     no_embeddings: bool,
+
+    /// Download nothing: use only the model and source releases already in ~/.ontoreport.
+    #[arg(long)]
+    offline: bool,
 }
 
 fn main() -> ExitCode {
@@ -67,8 +71,25 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    let t_rel0 = t0.elapsed();
+    let plans = releases::plans(&index);
+    let rels = (!plans.is_empty()).then(|| {
+        releases::fetch_all(
+            &plans,
+            &cfg.home.join("releases"),
+            cli.offline,
+            cfg.releases_max_mb,
+        )
+    });
+    let t_rel = t0.elapsed() - t_rel0;
+    let t_emb0 = t0.elapsed();
+    let model_missing = !embed::MODEL_FILES
+        .iter()
+        .all(|f| cfg.model.dir.join(f).is_file());
     let vectors: Result<embed::Vectors, String> = if cli.no_embeddings {
         Err("Run with --no-embeddings.".into())
+    } else if cli.offline && model_missing && !corpus::texts_needed(&index, cfg.text).is_empty() {
+        Err("Run with --offline before the model was downloaded.".into())
     } else {
         let texts = corpus::texts_needed(&index, cfg.text);
         if texts.is_empty() {
@@ -80,13 +101,17 @@ fn main() -> ExitCode {
             })
         }
     };
-    let t_embed = t0.elapsed() - t_load;
-    let emb = vectors
-        .as_ref()
-        .map(|v| (v, cfg.text))
-        .map_err(|e| e.clone());
-    let report = ontoreport::report_with(&index, &emb);
-    let t_sections = t0.elapsed() - t_load - t_embed;
+    let t_embed = t0.elapsed() - t_emb0;
+    let ctx = ontoreport::Context {
+        embeddings: vectors
+            .as_ref()
+            .map(|v| (v, cfg.text))
+            .map_err(|e| e.clone()),
+        releases: rels.as_ref(),
+    };
+    let t_sec0 = t0.elapsed();
+    let report = ontoreport::report_with(&index, &ctx);
+    let t_sections = t0.elapsed() - t_sec0;
 
     let json_path = cli.out.with_extension("json");
     let json = serde_json::to_string_pretty(&report).expect("report serializes");
@@ -110,9 +135,10 @@ fn main() -> ExitCode {
         eprintln!("  {:<16} {state}", s.title);
     }
     eprintln!(
-        "{} terms · read {:.0} ms · embeddings {:.0} ms · sections {:.0} ms · total {:.0} ms",
+        "{} terms · read {:.0} ms · releases {:.0} ms · embeddings {:.0} ms · sections {:.0} ms · total {:.0} ms",
         index.terms.len(),
         t_load.as_secs_f64() * 1e3,
+        t_rel.as_secs_f64() * 1e3,
         t_embed.as_secs_f64() * 1e3,
         t_sections.as_secs_f64() * 1e3,
         t0.elapsed().as_secs_f64() * 1e3

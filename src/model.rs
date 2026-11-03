@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use serde::Serialize;
 
 /// Where a term record came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Origin {
     /// A statement-level view of an ontology file (desk `g0.json`): what is actually in the file.
@@ -110,6 +110,8 @@ pub struct Index {
     pub unreadable: Vec<(String, String)>,
     /// Concepts extracted from a domain corpus, for the corpus-fit section.
     pub domain: Option<crate::corpus::DomainConcepts>,
+    /// Source releases the project lists in releases.toml.
+    pub release_specs: Vec<crate::releases::SourceSpec>,
 }
 
 impl Index {

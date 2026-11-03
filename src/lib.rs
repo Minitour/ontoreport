@@ -11,8 +11,11 @@ pub mod embed;
 pub mod help;
 pub mod html;
 pub mod model;
+pub mod net;
 pub mod owl;
+pub mod releases;
 pub mod report;
+pub mod reuse;
 pub mod sections;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -80,6 +83,11 @@ pub fn load(path: &Path) -> Result<Index, String> {
                     .extend(parsed.pitfalls.into_iter().chain(parsed.findings));
                 index.inputs.push(decisions.display().to_string());
             }
+            let specs = d.join("releases.toml");
+            if specs.is_file() {
+                index.release_specs.extend(releases::load_specs(&specs)?);
+                index.inputs.push(specs.display().to_string());
+            }
             if index.domain.is_none() {
                 if let Some(c) = CONCEPT_FILES
                     .iter()
@@ -145,17 +153,31 @@ struct DecisionsFile {
     findings: Vec<model::Decision>,
 }
 
-/// Run every section on the index, without embeddings: the coherence section is marked not run and
-/// corpus fit reports coverage and relevance only.
+/// What a report can use beyond the index: embeddings and source releases, both fetched by the caller.
+pub struct Context<'a> {
+    pub embeddings: corpus::Embeddings<'a>,
+    pub releases: Option<&'a releases::Releases>,
+}
+
+impl Default for Context<'_> {
+    fn default() -> Self {
+        Context {
+            embeddings: Err("Run without a sentence-embedding model.".to_string()),
+            releases: None,
+        }
+    }
+}
+
+/// Run every section on the index, without embeddings or releases: the coherence section is marked not
+/// run, corpus fit reports coverage and relevance only, and reuse fidelity checks only identifiers.
 pub fn report(index: &Index) -> Report {
-    report_with(
-        index,
-        &Err("Run without a sentence-embedding model.".to_string()),
-    )
+    report_with(index, &Context::default())
 }
 
 /// Run every section on the index. Sections are independent and run in parallel.
-pub fn report_with(index: &Index, emb: &corpus::Embeddings) -> Report {
+pub fn report_with(index: &Index, ctx: &Context) -> Report {
+    let emb = &ctx.embeddings;
+    let rels = ctx.releases;
     type Run = fn(&Index) -> Section;
     let runs: [Run; 5] = [
         sections::logic,
@@ -166,6 +188,7 @@ pub fn report_with(index: &Index, emb: &corpus::Embeddings) -> Report {
     ];
     let sections: Vec<Section> = std::thread::scope(|scope| {
         let mut handles: Vec<_> = runs.iter().map(|f| scope.spawn(move || f(index))).collect();
+        handles.insert(3, scope.spawn(move || reuse::reuse(index, rels)));
         handles.push(scope.spawn(move || corpus::coherence(index, emb)));
         handles.push(scope.spawn(move || corpus::corpus_fit(index, emb)));
         handles

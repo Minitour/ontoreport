@@ -28,6 +28,11 @@ batch_size = 8
 # Folder models are downloaded to. Default: the "models" folder next to this file.
 # dir = "D:/models"
 
+[releases]
+# Largest source release ontoreport downloads for the reuse-fidelity section, in megabytes. Releases
+# are cached in the "releases" folder next to this file.
+max_mb = 100
+
 [text]
 # What is embedded for each class: "label", or "label+definition" (the label, a colon, then the
 # definition when there is one). Label plus definition agreed best with the domain experts' judgments
@@ -40,6 +45,19 @@ form = "label+definition"
 struct File {
     model: ModelFile,
     text: TextFile,
+    releases: ReleasesFile,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct ReleasesFile {
+    max_mb: u64,
+}
+
+impl Default for ReleasesFile {
+    fn default() -> Self {
+        ReleasesFile { max_mb: 100 }
+    }
 }
 
 // The defaults below must match DEFAULT_CONFIG; a test checks that they do.
@@ -139,6 +157,8 @@ pub struct Config {
     pub path: PathBuf,
     pub model: ModelConfig,
     pub text: TextForm,
+    /// Largest source release to download, in megabytes.
+    pub releases_max_mb: u64,
 }
 
 impl Config {
@@ -215,6 +235,7 @@ pub fn load(path: Option<&Path>) -> Result<Config, String> {
             dir,
         },
         text: file.text.form,
+        releases_max_mb: file.releases.max_mb,
     })
 }
 

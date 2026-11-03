@@ -1,0 +1,5 @@
+[[source]]
+name = "Water"
+namespaces = ["http://example.org/water#"]
+files = ["source/water.ttl"]
+version = "2026-01-01"

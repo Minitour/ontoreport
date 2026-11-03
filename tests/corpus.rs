@@ -6,6 +6,13 @@ use ontoreport::corpus;
 use ontoreport::embed::Vectors;
 use ontoreport::report::{Report, Section};
 
+fn with(v: &Vectors) -> ontoreport::Context<'_> {
+    ontoreport::Context {
+        embeddings: Ok((v, TextForm::Label)),
+        releases: None,
+    }
+}
+
 fn fixture() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus")
 }
@@ -86,7 +93,7 @@ fn coverage_and_relevance_follow_the_2023_definitions() {
 fn coherence_flags_the_child_that_does_not_fit() {
     let index = ontoreport::load(&fixture()).unwrap();
     let v = vectors(&index);
-    let r = ontoreport::report_with(&index, &Ok((&v, TextForm::Label)));
+    let r = ontoreport::report_with(&index, &with(&v));
     let s = section(&r, "coherence");
     assert!(s.ran);
     assert_eq!(metric(s, "concept families scored (ontology file)"), 3);
@@ -101,10 +108,8 @@ fn coherence_flags_the_child_that_does_not_fit() {
 fn reports_with_embeddings_are_deterministic() {
     let index = ontoreport::load(&fixture()).unwrap();
     let v = vectors(&index);
-    let a = serde_json::to_string(&ontoreport::report_with(&index, &Ok((&v, TextForm::Label))))
-        .unwrap();
-    let b = serde_json::to_string(&ontoreport::report_with(&index, &Ok((&v, TextForm::Label))))
-        .unwrap();
+    let a = serde_json::to_string(&ontoreport::report_with(&index, &with(&v))).unwrap();
+    let b = serde_json::to_string(&ontoreport::report_with(&index, &with(&v))).unwrap();
     assert_eq!(a, b);
 }
 
@@ -112,7 +117,7 @@ fn reports_with_embeddings_are_deterministic() {
 fn every_new_metric_and_chart_has_help() {
     let index = ontoreport::load(&fixture()).unwrap();
     let v = vectors(&index);
-    let r = ontoreport::report_with(&index, &Ok((&v, TextForm::Label)));
+    let r = ontoreport::report_with(&index, &with(&v));
     for id in ["coherence", "corpus"] {
         let s = section(&r, id);
         for m in &s.metrics {

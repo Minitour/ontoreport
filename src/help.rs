@@ -91,6 +91,64 @@ pub fn about(name: &str) -> Option<&'static str> {
         }
         "pitfall instances by pitfall" => "Which pitfalls occur most often, counting each affected term once per pitfall.",
 
+        // ── reuse fidelity ──────────────────────────────────────────────
+        "reused terms checked" => {
+            "How many terms taken from other ontologies or vocabularies were compared with the release they \
+             came from. Desk candidates marked Out are not counted."
+        }
+        "reused terms matching their release" => {
+            "The share of reused terms that agree with their source release: present, not obsolete, under no \
+             obsolete parent, with the same label and definition (ignoring case, spacing and a final full stop). \
+             Higher is better."
+        }
+        "obsolete in the source release" => {
+            "Reused terms that their source has retired (owl:deprecated, or a label starting 'obsolete'). The \
+             release often names a replacement, shown in the finding."
+        }
+        "not in the source release" => {
+            "Reused identifiers that none of the releases read contains: a typing error in the identifier, a \
+             term from a different source than recorded, or a term the source has removed."
+        }
+        "parent obsolete in the source release" => {
+            "Reused terms whose parent in the source release is obsolete, so the term hangs from a retired \
+             class there. Usually the source has not yet moved it; worth knowing before relying on its place."
+        }
+        "label differs from the release" => {
+            "Reused terms whose name in the project differs from the name in the source release. A qualifier \
+             in brackets that the desk adds, such as '(DwC)', is ignored."
+        }
+        "definition differs from the release" => {
+            "Reused terms whose definition in the project differs from every definition the source release \
+             gives: an edited, outdated or newer text."
+        }
+        "definition not in the release" => {
+            "Reused terms that have a definition in the project although their source release gives none: the \
+             text was written for the project and needs its own source."
+        }
+        "identifiers with two names" | "identifier with two names" => {
+            "Identifiers that the project uses under two different names, for example in two desk groups. One \
+             identifier should have one name."
+        }
+        "source releases read" => {
+            "How many source release files were read: OBO releases on the dates the project recorded, and the \
+             sources listed in releases.toml."
+        }
+        "source releases that could not be read" => {
+            "Releases that could not be downloaded or read; terms from them are not checked. The reason is in \
+             the section notes."
+        }
+        "releases that differ from the recorded version" => {
+            "Releases whose file states a different version from the one the project recorded, because the \
+             recorded version could not be downloaded and the current one was used."
+        }
+        "reuse problems by source release" => {
+            "For each source release, how many reused terms have each kind of problem."
+        }
+        "desk terms with no release to check against, by source" => {
+            "Desk candidates whose source has no release ontoreport could read: add the source to \
+             releases.toml to check them."
+        }
+
         // ── provenance ──────────────────────────────────────────────────
         "terms with a definition" => {
             "The share of terms that have a definition: a textual definition (IAO:0000115 or skos:definition) \

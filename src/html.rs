@@ -42,7 +42,7 @@ main{max-width:1240px;margin:0 auto;padding:18px 16px 60px}
 .metrics{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
 .metric{border:1px solid var(--rule);border-radius:8px;padding:6px 10px;min-width:150px}
 .metric b{display:block;font-size:1.05rem}.metric span{font-size:.76rem;color:var(--muted)}
-.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px;margin:6px 0 10px}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr));gap:12px;margin:6px 0 10px}
 .card{border:1px solid var(--rule);border-radius:10px;padding:12px;min-width:0}
 .card h3{margin:0 0 8px;font-size:.9rem}.card.wide{grid-column:1/-1}
 .donut{display:flex;align-items:center;gap:14px}.donut .t{font-size:.85rem;color:var(--muted)}
@@ -56,7 +56,7 @@ svg text{fill:var(--fg);font-family:var(--sans)}
 .tree .caret{display:inline-block;width:14px;color:var(--muted);transition:transform .1s}.tree details[open]>summary .caret{transform:rotate(90deg)}
 .tree .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tree .num b{color:var(--fg);margin-right:6px}
 .sbar{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--track)}.sbar span{display:block;height:100%}
-.hbars{display:grid;grid-template-columns:170px minmax(80px,1fr) 64px;gap:6px 12px;align-items:center;font-size:.82rem}
+.hbars{display:grid;grid-template-columns:minmax(90px,170px) minmax(60px,1fr) auto;gap:6px 12px;align-items:center;font-size:.82rem}
 .hbars .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;color:var(--fg)}
 .hbars .trk{height:13px;border-radius:3px;background:var(--track);overflow:hidden;display:flex}
 .hbars .trk span{display:block;height:100%}.hbars .n{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
@@ -78,6 +78,16 @@ background:var(--fg);color:var(--bg);font-size:.78rem;font-weight:400;line-heigh
 box-shadow:0 6px 20px rgba(0,0,0,.25);white-space:normal;text-align:left}
 .help:hover .tip,.help:focus .tip,.help:focus-within .tip{display:block}
 footer{max-width:1240px;margin:0 auto;padding:0 16px 30px;color:var(--muted);font-size:.8rem}
+td{overflow-wrap:anywhere}
+@media (max-width:640px){
+main{padding:12px 10px 40px}.panel{padding:12px;border-radius:10px}.hwrap{padding:10px 12px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}.kpi .v{font-size:1.4rem}
+.metric{min-width:0;flex:1 1 140px}
+.tree .row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name num" "bar bar";gap:3px 10px}
+.tree .row .name{grid-area:name}.tree .row .sbar{grid-area:bar}.tree .row .num{grid-area:num}
+.hbars{grid-template-columns:minmax(0,40%) minmax(40px,1fr) auto;gap:5px 8px}
+.donut{flex-wrap:wrap}
+}
 "#;
 
 const JS: &str = r#"

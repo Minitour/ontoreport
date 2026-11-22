@@ -172,7 +172,8 @@ jobs:
       matrix:
         include:
           - { runner: ubuntu-latest,  target: x86_64,  manylinux: auto }
-          - { runner: ubuntu-latest,  target: aarch64, manylinux: auto }
+          # 2_28: the manylinux2014 cross compiler (gcc 4.8) cannot assemble ring for aarch64
+          - { runner: ubuntu-latest,  target: aarch64, manylinux: "2_28" }
           - { runner: macos-latest,   target: x86_64,  manylinux: "" }
           - { runner: macos-latest,   target: aarch64, manylinux: "" }
           - { runner: windows-latest, target: x64,     manylinux: "" }

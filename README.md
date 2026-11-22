@@ -8,10 +8,6 @@ whether every term traces to a requirement, every definition to a cited source, 
 to its source release, and how much of the ontology has been reviewed. One native binary per
 platform, written in Rust, distributed on npm and PyPI.
 
-> **Status: early development.** The published 0.0.1 is a placeholder; build from source for the
-> current version. Requirements coverage from a requirements file and review decisions from a desk
-> export come next.
-
 ## Usage
 
 ```bash
@@ -167,7 +163,7 @@ ontology-assessment workflow:
    ([`references/findings.md`](skills/ontoreport/references/findings.md) explains every check);
 4. record decisions and re-run.
 
-The skill ships its test cases under `evals/`; they need an ontoreport newer than 0.0.1 on the PATH.
+The skill ships its test cases under `evals/`; they need ontoreport 1.0.0 or later on the PATH.
 
 ## Install
 

@@ -22,7 +22,7 @@ npx -y ontoreport --version      # npm, no install
 pipx run ontoreport --version    # or PyPI (uvx ontoreport also works)
 ```
 
-Until a release newer than 0.0.1 is published, build from source:
+Version 0.0.1 was a placeholder without the checks; use 1.0.0 or later. To build from source:
 `cargo install --git https://github.com/Minitour/ontoreport`. Every flag is listed in
 `references/cli.md`.
 

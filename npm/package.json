@@ -1,6 +1,6 @@
 {
   "name": "ontoreport",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Quality report for OWL ontologies built from the project record",
   "homepage": "https://github.com/Minitour/ontoreport",
   "repository": {
@@ -27,12 +27,12 @@
     "postinstall": "node ./bin/install.js"
   },
   "optionalDependencies": {
-    "@ontoreport/ontoreport-linux-x64": "0.0.1",
-    "@ontoreport/ontoreport-linux-arm64": "0.0.1",
-    "@ontoreport/ontoreport-darwin-x64": "0.0.1",
-    "@ontoreport/ontoreport-darwin-arm64": "0.0.1",
-    "@ontoreport/ontoreport-win32-x64": "0.0.1",
-    "@ontoreport/ontoreport-win32-arm64": "0.0.1"
+    "@ontoreport/ontoreport-linux-x64": "1.0.0",
+    "@ontoreport/ontoreport-linux-arm64": "1.0.0",
+    "@ontoreport/ontoreport-darwin-x64": "1.0.0",
+    "@ontoreport/ontoreport-darwin-arm64": "1.0.0",
+    "@ontoreport/ontoreport-win32-x64": "1.0.0",
+    "@ontoreport/ontoreport-win32-arm64": "1.0.0"
   },
   "engines": {
     "node": ">=18"

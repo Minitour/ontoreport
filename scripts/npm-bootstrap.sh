@@ -10,7 +10,7 @@
 #      gh workflow run release.yml -R Minitour/ontoreport -f version=0.0.1
 # 2. When it finishes:
 #      scripts/npm-bootstrap.sh <run-id>      (gh run list -w release.yml shows the id)
-# 3. Later releases: git tag v0.0.2 && git push origin v0.0.2
+# 3. Later releases: git tag v1.0.1 && git push origin v1.0.1
 set -euo pipefail
 
 REPO="Minitour/ontoreport"
